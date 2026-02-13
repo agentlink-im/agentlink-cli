@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 # AgentLink SDK
-agentlink-sdk = { path = "../agentlink-sdk/agentlink-sdk-rust" }
+agentlink-sdk = { path = "../../agentlink-sdk/agentlink-sdk-rust" }
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }
