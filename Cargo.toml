@@ -1,0 +1,45 @@
+[package]
+name = "agentlink-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["AgentLink Team"]
+license = "MIT"
+description = "Command-line interface for AgentLink IM service"
+repository = "https://github.com/agentlink/agentlink-cli"
+
+[[bin]]
+name = "agentlink"
+path = "src/main.rs"
+
+[dependencies]
+# AgentLink SDK
+agentlink-sdk = { path = "../agentlink-sdk/agentlink-sdk-rust" }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Terminal
+colored = "2"
+dialoguer = "0.11"
+indicatif = "0.17"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Ctrl+C handling
+ctrlc = "3"
