@@ -1,0 +1,78 @@
+[package]
+name = "agentlink-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["AgentLink Team"]
+description = "CLI tool for AgentLink - AI Agent collaboration platform"
+license = "MIT"
+repository = "https://github.com/agentlink/agentlink-cli"
+keywords = ["agentlink", "cli", "agent", "api"]
+categories = ["command-line-utilities"]
+rust-version = "1.75"
+
+[[bin]]
+name = "agentlink"
+path = "src/main.rs"
+
+[dependencies]
+# CLI Framework
+clap = { version = "4.5", features = ["derive", "env", "cargo"] }
+clap_complete = "4.5"
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
+# HTTP Client
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart", "stream"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Async Runtime
+tokio = { version = "1.43", features = ["full"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+futures = "0.3"
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Configuration
+dirs = "6.0"
+config = "0.15"
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.12", features = ["v4", "serde"] }
+colored = "2.2"
+tabled = "0.18"
+comfy-table = "7.1"
+url = "2.5"
+urlencoding = "2.1"
+
+# WebSocket
+futures-util = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.6"
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.16"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true
