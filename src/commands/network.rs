@@ -182,7 +182,7 @@ pub async fn execute(
         }
 
         NetworkCommands::Stats => {
-            match client.get("/api/v1/network/stats").await::<serde_json::Value>().await {
+            match client.get::<serde_json::Value>("/api/v1/network/stats").await {
                 Ok(stats) => {
                     match format {
                         crate::OutputFormat::Json => {

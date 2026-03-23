@@ -16,6 +16,19 @@ pub struct ApiError {
     pub message: String,
 }
 
+/// 认证响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthResponse {
+    pub user: User,
+    pub token: String,
+    #[serde(rename = "expiresIn")]
+    pub expires_in: i64,
+    #[serde(rename = "isNewUser")]
+    pub is_new_user: bool,
+    #[serde(rename = "needsOnboarding")]
+    pub needs_onboarding: bool,
+}
+
 /// 用户信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -205,10 +218,10 @@ pub struct ApiKey {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaginationMeta {
     pub page: i64,
-    #[serde(rename = "perPage")]
+    #[serde(rename = "per_page")]
     pub per_page: i64,
     pub total: i64,
-    #[serde(rename = "totalPages")]
+    #[serde(rename = "total_pages")]
     pub total_pages: i64,
 }
 

@@ -32,12 +32,17 @@ pub struct Defaults {
     pub page_size: u32,
 }
 
+/// API 路径前缀 - 强制规范，不可配置
+pub const API_PREFIX: &str = "/api/v1";
+/// WebSocket 路径 - 强制规范，不可配置
+pub const WS_PATH: &str = "/ws";
+
 fn default_server_url() -> String {
     "https://api.agentlink.example.com".to_string()
 }
 
 fn default_websocket_url() -> String {
-    "wss://ws.agentlink.example.com".to_string()
+    "wss://api.agentlink.example.com".to_string()
 }
 
 fn default_output_format() -> String {

@@ -175,7 +175,7 @@ pub async fn execute(
                 "participantIds": participant_ids,
             });
 
-            match client.post("/api/v1/conversations", Some(body)).await::<serde_json::Value>().await {
+            match client.post::<serde_json::Value, _>("/api/v1/conversations", Some(body)).await {
                 Ok(response) => {
                     print_success("Conversation created!");
                     println!("  {}: {}", "ID".bold(), response["id"]);

@@ -42,8 +42,11 @@ impl ApiClient {
         let mut request = self.client.request(method, &url);
 
         // 添加认证头
-        if let Some(ref api_key) = self.api_key {
-            request = request.header("Authorization", format!("ApiKey {}", api_key));
+        // 支持两种 token 类型：
+        // - sk_ 前缀：API Key，走 API Key 鉴权逻辑
+        // - jwt_ 前缀：JWT Token，走 JWT 鉴权逻辑
+        if let Some(ref token) = self.api_key {
+            request = request.header("Authorization", format!("Bearer {}", token));
         }
 
         // 添加默认头
@@ -158,9 +161,65 @@ impl ApiClient {
 
     // ==================== 认证 API ====================
 
-    /// 验证 API Key
+    /// 验证 API Key / JWT Token
     pub async fn verify_api_key(&self) -> Result<crate::models::User> {
         self.get("/api/v1/users/me").await
+    }
+
+    /// 发送验证码
+    pub async fn send_verification_code(&self, email: &str) -> Result<serde_json::Value> {
+        let body = serde_json::json!({
+            "email": email,
+        });
+        self.post("/api/v1/auth/send-code", Some(body)).await
+    }
+
+    /// 一键登录/注册
+    pub async fn magic_login(&self, email: &str, code: &str) -> Result<crate::models::AuthResponse> {
+        let body = serde_json::json!({
+            "email": email,
+            "code": code,
+        });
+        self.post("/api/v1/auth/magic-login", Some(body)).await
+    }
+
+    /// 完成 Onboarding
+    pub async fn complete_onboarding(&self, display_name: &str) -> Result<crate::models::User> {
+        let body = serde_json::json!({
+            "display_name": display_name,
+        });
+        self.post("/api/v1/auth/complete-onboarding", Some(body)).await
+    }
+
+    // ==================== 用户 API ====================
+
+    /// 获取用户列表
+    pub async fn list_users(
+        &self,
+        page: Option<i64>,
+        per_page: Option<i64>,
+    ) -> Result<crate::models::PaginatedResponse<crate::models::User>> {
+        let mut path = "/api/v1/users".to_string();
+        let mut params = vec![];
+
+        if let Some(p) = page {
+            params.push(format!("page={}", p));
+        }
+        if let Some(pp) = per_page {
+            params.push(format!("per_page={}", pp));
+        }
+
+        if !params.is_empty() {
+            path.push('?');
+            path.push_str(&params.join("&"));
+        }
+
+        self.get(&path).await
+    }
+
+    /// 获取用户详情
+    pub async fn get_user(&self, user_id: &str) -> Result<crate::models::User> {
+        self.get(&format!("/api/v1/users/{}", user_id)).await
     }
 
     // ==================== 任务 API ====================

@@ -180,7 +180,7 @@ pub async fn execute(
                 "description": description,
             });
 
-            match client.post("/api/v1/agents/me/services", Some(body)).await::<serde_json::Value>().await {
+            match client.post::<serde_json::Value, _>("/api/v1/agents/me/services", Some(body)).await {
                 Ok(response) => {
                     print_success("Service added!");
                     println!("  {}: {}", "ID".bold(), response["id"]);
