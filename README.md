@@ -196,6 +196,26 @@ cargo clippy
 cargo fmt
 ```
 
+### 生成式 API Client
+
+`agentlink-cli/src/api/generated.rs` 的单一来源是：
+
+- `protocol/src/http_surface.rs`
+- 生成器：`protocol/src/bin/generate_http_artifacts.rs`
+
+重生成命令：
+
+```bash
+make sync-http-artifacts
+# 或
+cargo run --manifest-path ../protocol/Cargo.toml --bin generate_http_artifacts
+```
+
+说明：
+
+- CLI 只生成当前命令实际依赖的 HTTP 接口子集，不再镜像整份 shared HTTP surface
+- 若同时修改了前端协议类型产物，再额外执行 `pnpm --dir ../frontend/packages/protocol sync`
+
 ## 许可证
 
 MIT

@@ -32,11 +32,6 @@ pub struct Defaults {
     pub page_size: u32,
 }
 
-/// API 路径前缀 - 强制规范，不可配置
-pub const API_PREFIX: &str = "/api/v1";
-/// WebSocket 路径 - 强制规范，不可配置
-pub const WS_PATH: &str = "/ws";
-
 fn default_server_url() -> String {
     "https://api.agentlink.example.com".to_string()
 }
@@ -111,23 +106,9 @@ impl Config {
         Ok(config_dir.join("agentlink").join("config.toml"))
     }
 
-    /// 获取配置目录
-    pub fn config_dir() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
-
-        Ok(config_dir.join("agentlink"))
-    }
-
     /// 检查是否已登录
     pub fn is_authenticated(&self) -> bool {
         self.api_key.is_some()
-    }
-
-    /// 获取 API Key
-    pub fn get_api_key(&self) -> Result<&str> {
-        self.api_key
-            .as_deref()
-            .context("Not authenticated. Please run 'agentlink auth login' first.")
     }
 
     /// 设置 API Key

@@ -4,7 +4,7 @@ use colored::Colorize;
 
 use crate::api::ApiClient;
 use crate::config::Config;
-use crate::models::{CreateServiceRequest, UpdateAgentAvailabilityRequest};
+use crate::models::CreateServiceRequest;
 use crate::utils::output::{print_error, print_success};
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -102,12 +102,9 @@ pub async fn execute(
         },
         AgentCommands::SetAvailability { status } => {
             let user = client.get_current_user().await?;
-            let update = UpdateAgentAvailabilityRequest {
-                is_available: status.as_bool(),
-            };
 
             match client
-                .update_agent_availability(&user.id.to_string(), update.is_available)
+                .update_agent_availability(&user.id.to_string(), status.as_bool())
                 .await
             {
                 Ok(_) => {

@@ -1,10 +1,10 @@
+use agentlink_protocol::ApiResponse;
 use anyhow::{Context, Result};
 use reqwest::{Client, Method, RequestBuilder, Response};
 use serde::{de::DeserializeOwned, Serialize};
 use std::time::Duration;
 
 use crate::config::Config;
-use crate::models::ApiResponse;
 
 mod generated;
 
@@ -78,18 +78,6 @@ impl ApiClient {
         self.send_json(request).await
     }
 
-    pub async fn post_stream<B>(&self, path: &str, body: Option<B>) -> Result<Response>
-    where
-        B: Serialize,
-    {
-        let mut request = self.build_request(Method::POST, path);
-        if let Some(body) = body {
-            request = request.json(&body);
-        }
-
-        self.send_stream(request).await
-    }
-
     pub async fn put<T, B>(&self, path: &str, body: Option<B>) -> Result<T>
     where
         T: DeserializeOwned,
@@ -103,36 +91,11 @@ impl ApiClient {
         self.send_json(request).await
     }
 
-    pub async fn delete<T>(&self, path: &str) -> Result<T>
-    where
-        T: DeserializeOwned,
-    {
-        self.send_json(self.build_request(Method::DELETE, path))
-            .await
-    }
-
-    pub async fn delete_no_data(&self, path: &str) -> Result<()> {
-        self.send_without_data(self.build_request(Method::DELETE, path))
-            .await
-    }
-
     pub async fn post_no_data<B>(&self, path: &str, body: Option<B>) -> Result<()>
     where
         B: Serialize,
     {
         let mut request = self.build_request(Method::POST, path);
-        if let Some(body) = body {
-            request = request.json(&body);
-        }
-
-        self.send_without_data(request).await
-    }
-
-    pub async fn put_no_data<B>(&self, path: &str, body: Option<B>) -> Result<()>
-    where
-        B: Serialize,
-    {
-        let mut request = self.build_request(Method::PUT, path);
         if let Some(body) = body {
             request = request.json(&body);
         }
@@ -153,22 +116,6 @@ impl ApiClient {
         let response = request.send().await.context("Failed to send request")?;
 
         self.handle_empty_success(response).await
-    }
-
-    async fn send_stream(&self, request: RequestBuilder) -> Result<Response> {
-        let response = request
-            .header("Accept", "text/event-stream")
-            .send()
-            .await
-            .context("Failed to send request")?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Self::http_error(status.as_u16(), &body);
-        }
-
-        Ok(response)
     }
 
     async fn handle_json_response<T>(&self, response: Response) -> Result<T>
@@ -239,10 +186,6 @@ impl ApiClient {
         self.get_current_user().await
     }
 
-    pub async fn get_user(&self, user_id: &str) -> Result<agentlink_protocol::user::UserResponse> {
-        self.get_user_by_id(user_id).await
-    }
-
     pub async fn get_task(&self, task_id: &str) -> Result<agentlink_protocol::task::TaskResponse> {
         self.get_task_by_id(task_id).await
     }
@@ -294,13 +237,6 @@ impl ApiClient {
         &self,
     ) -> Result<agentlink_protocol::message::MarkAllNotificationsReadResponse> {
         self.mark_all_notifications_as_read().await
-    }
-
-    pub async fn get_agent_profile(
-        &self,
-        agent_id: &str,
-    ) -> Result<agentlink_protocol::agent::AgentProfileResponse> {
-        self.get_profile(agent_id).await
     }
 
     pub async fn get_current_agent_profile(

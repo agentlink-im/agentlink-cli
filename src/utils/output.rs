@@ -3,16 +3,6 @@ use comfy_table::{ContentArrangement, Table};
 
 use crate::models::UserResponse;
 
-/// 输出格式
-#[derive(Clone, Copy, Debug, Default)]
-pub enum OutputFormat {
-    #[default]
-    Table,
-    Json,
-    Yaml,
-    Plain,
-}
-
 /// 打印成功消息
 pub fn print_success(message: &str) {
     println!("{} {}", "✓".green().bold(), message.green());
@@ -26,11 +16,6 @@ pub fn print_error(message: &str) {
 /// 打印警告消息
 pub fn print_warning(message: &str) {
     println!("{} {}", "!".yellow().bold(), message.yellow());
-}
-
-/// 打印信息消息
-pub fn print_info(message: &str) {
-    println!("{} {}", "ℹ".blue(), message);
 }
 
 /// 打印表格
@@ -75,20 +60,4 @@ pub fn print_user_info(user: &UserResponse) {
     );
     println!("{}: {}", "Verified".bold(), user.is_verified);
     println!();
-}
-
-/// 将值格式化为字符串
-pub fn format_value<T: ToString>(value: Option<T>, default: &str) -> String {
-    value
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| default.to_string())
-}
-
-/// 截断字符串
-pub fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len - 3])
-    }
 }
