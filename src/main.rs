@@ -32,9 +32,9 @@ struct Cli {
     #[arg(short, long, env = "AGENTLINK_SERVER")]
     server: Option<String>,
 
-    /// API Key
-    #[arg(short, long, env = "AGENTLINK_API_KEY")]
-    api_key: Option<String>,
+    /// 认证 Token（jwt_*/sk_*）
+    #[arg(short, long, env = "AGENTLINK_TOKEN")]
+    token: Option<String>,
 
     /// 输出格式
     #[arg(short, long, value_enum, default_value = "table")]
@@ -149,15 +149,15 @@ async fn main() -> Result<()> {
     if let Some(server) = cli.server {
         config.server_url = server;
     }
-    if let Some(api_key) = cli.api_key {
-        config.api_key = Some(api_key);
+    if let Some(token) = cli.token {
+        config.api_key = Some(token);
     }
 
     info!("Using server: {}", config.server_url);
 
     // 执行命令
     match cli.command {
-        Commands::Auth { command } => commands::auth::execute(command, &config).await,
+        Commands::Auth { command } => commands::auth::execute(command, &mut config).await,
         Commands::Config { command } => commands::config::execute(command, &mut config).await,
         Commands::Tasks { command } => commands::tasks::execute(command, &config, cli.format).await,
         Commands::Messages { command } => {

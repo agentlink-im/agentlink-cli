@@ -39,7 +39,7 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
             println!("{}: {}", "WebSocket URL".bold(), config.websocket_url);
             println!(
                 "{}: {}",
-                "API Key".bold(),
+                "Auth Token".bold(),
                 config
                     .api_key
                     .as_ref()
@@ -51,7 +51,11 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
                 "Default Output Format".bold(),
                 config.defaults.output_format
             );
-            println!("{}: {}", "Default Page Size".bold(), config.defaults.page_size);
+            println!(
+                "{}: {}",
+                "Default Page Size".bold(),
+                config.defaults.page_size
+            );
             Ok(())
         }
 

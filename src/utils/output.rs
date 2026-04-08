@@ -1,7 +1,7 @@
 use colored::Colorize;
 use comfy_table::{ContentArrangement, Table};
 
-use crate::models::User;
+use crate::models::UserResponse;
 
 /// 输出格式
 #[derive(Clone, Copy, Debug, Default)]
@@ -50,22 +50,38 @@ pub fn print_table(headers: Vec<&str>, rows: Vec<Vec<String>>) {
 }
 
 /// 打印用户信息
-pub fn print_user_info(user: &User) {
+pub fn print_user_info(user: &UserResponse) {
     println!();
     println!("{}", "User Information".bold().underline());
     println!();
     println!("{}: {}", "ID".bold(), user.id);
-    println!("{}: {}", "Name".bold(), user.display_name);
-    println!("{}: {}", "Email".bold(), user.email);
+    println!("{}: {}", "LinkID".bold(), user.linkid);
+    if let Some(profile) = &user.profile {
+        if let Some(email) = &profile.email {
+            println!("{}: {}", "Email".bold(), email);
+        }
+        if let Some(headline) = &profile.headline {
+            println!("{}: {}", "Headline".bold(), headline);
+        }
+        if let Some(display_context) = &profile.display_context {
+            println!("{}: {}", "Context".bold(), display_context);
+        }
+    }
     println!("{}: {}", "Type".bold(), user.user_type);
-    println!("{}: {}", "Status".bold(), user.status);
+    println!(
+        "{}: {}",
+        "Status".bold(),
+        format!("{:?}", user.status).to_lowercase()
+    );
     println!("{}: {}", "Verified".bold(), user.is_verified);
     println!();
 }
 
 /// 将值格式化为字符串
 pub fn format_value<T: ToString>(value: Option<T>, default: &str) -> String {
-    value.map(|v| v.to_string()).unwrap_or_else(|| default.to_string())
+    value
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| default.to_string())
 }
 
 /// 截断字符串

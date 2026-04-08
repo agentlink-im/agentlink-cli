@@ -1,48 +1,54 @@
 use anyhow::Result;
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 
 use crate::api::ApiClient;
 use crate::config::Config;
+use crate::models::{CreateServiceRequest, UpdateAgentAvailabilityRequest};
 use crate::utils::output::{print_error, print_success};
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum AvailabilityArg {
+    Available,
+    Unavailable,
+}
+
+impl AvailabilityArg {
+    fn as_bool(self) -> bool {
+        matches!(self, Self::Available)
+    }
+}
 
 #[derive(Subcommand)]
 pub enum AgentCommands {
     /// 查看当前 Agent 状态
     Status,
 
-    /// 更新 Agent 状态
-    SetStatus {
-        /// 状态
-        status: String,
-
-        /// 当前负载
-        #[arg(short, long)]
-        load: Option<i32>,
-
-        /// 最大容量
-        #[arg(short, long)]
-        capacity: Option<i32>,
+    /// 设置当前 Agent 可用性
+    SetAvailability {
+        #[arg(value_enum)]
+        status: AvailabilityArg,
     },
 
-    /// 查看 Agent 统计
+    /// 查看当前 Agent 统计
     Stats,
 
-    /// 列出服务
+    /// 列出当前 Agent 服务
     Services,
 
-    /// 添加服务
+    /// 为当前 Agent 添加服务
     AddService {
-        /// 服务名称
         name: String,
 
-        /// 价格
-        price: i64,
+        #[arg(long)]
+        price: Option<f64>,
 
-        /// 单位
-        unit: String,
+        #[arg(long)]
+        currency: Option<String>,
 
-        /// 描述
+        #[arg(long)]
+        days: Option<i32>,
+
         #[arg(short, long)]
         description: Option<String>,
     },
@@ -53,144 +59,174 @@ pub async fn execute(
     config: &Config,
     format: crate::OutputFormat,
 ) -> Result<()> {
-    if !config.is_authenticated() {
-        print_error("You must be logged in to use this command.");
-        println!("Run {} to authenticate.", "agentlink auth login".cyan());
-        return Ok(());
-    }
-
+    ensure_authenticated(config)?;
     let client = ApiClient::new(config)?;
 
     match command {
-        AgentCommands::Status => {
-            match client.get_agent_stats().await {
-                Ok(stats) => {
-                    match format {
-                        crate::OutputFormat::Json => {
-                            println!("{}", serde_json::to_string_pretty(&stats)?);
-                        }
-                        _ => {
-                            println!("\n{}:\n", "Agent Status".bold().underline());
-                            if let Some(status) = stats.get("availabilityStatus") {
-                                println!("{}: {}", "Status".bold(), status);
-                            }
-                            if let Some(load) = stats.get("currentLoad") {
-                                println!("{}: {}", "Current Load".bold(), load);
-                            }
-                            if let Some(capacity) = stats.get("maxCapacity") {
-                                println!("{}: {}", "Max Capacity".bold(), capacity);
-                            }
-                        }
+        AgentCommands::Status => match client.get_current_agent_profile().await {
+            Ok(profile) => {
+                match format {
+                    crate::OutputFormat::Json => {
+                        println!("{}", serde_json::to_string_pretty(&profile)?);
                     }
-                    Ok(())
+                    crate::OutputFormat::Yaml => {
+                        println!("{}", serde_yaml::to_string(&profile)?);
+                    }
+                    _ => {
+                        println!("\n{}:\n", "Agent Status".bold().underline());
+                        println!("{}: {}", "Agent ID".bold(), profile.user_id);
+                        println!("{}: {}", "LinkID".bold(), profile.linkid);
+                        println!(
+                            "{}: {}",
+                            "Available".bold(),
+                            if profile.is_available { "yes" } else { "no" }
+                        );
+                        println!(
+                            "{}: {}",
+                            "Display Name".bold(),
+                            profile.display_name.unwrap_or_default()
+                        );
+                        println!(
+                            "{}: {}",
+                            "Specialty".bold(),
+                            profile.specialty.unwrap_or_default()
+                        );
+                    }
                 }
-                Err(e) => {
-                    print_error(&format!("Failed to get agent status: {}", e));
-                    Ok(())
-                }
+                Ok(())
             }
-        }
+            Err(error) => {
+                print_error(&format!("Failed to get agent status: {}", error));
+                Ok(())
+            }
+        },
+        AgentCommands::SetAvailability { status } => {
+            let user = client.get_current_user().await?;
+            let update = UpdateAgentAvailabilityRequest {
+                is_available: status.as_bool(),
+            };
 
-        AgentCommands::SetStatus { status, load, capacity } => {
-            let body = serde_json::json!({
-                "availabilityStatus": status,
-                "currentLoad": load,
-                "maxCapacity": capacity,
-            });
-
-            match client.update_agent_status(body).await {
+            match client
+                .update_agent_availability(&user.id.to_string(), update.is_available)
+                .await
+            {
                 Ok(_) => {
-                    print_success("Agent status updated!");
+                    print_success("Agent availability updated.");
                     Ok(())
                 }
-                Err(e) => {
-                    print_error(&format!("Failed to update agent status: {}", e));
+                Err(error) => {
+                    print_error(&format!("Failed to update availability: {}", error));
                     Ok(())
                 }
             }
         }
+        AgentCommands::Stats => match client.get_current_agent_profile().await {
+            Ok(profile) => {
+                match format {
+                    crate::OutputFormat::Json => {
+                        println!("{}", serde_json::to_string_pretty(&profile)?);
+                    }
+                    crate::OutputFormat::Yaml => {
+                        println!("{}", serde_yaml::to_string(&profile)?);
+                    }
+                    _ => {
+                        println!("\n{}:\n", "Agent Statistics".bold().underline());
+                        println!("{}: {}", "Rating".bold(), profile.rating);
+                        println!("{}: {}", "Completed Tasks".bold(), profile.completed_tasks);
+                        println!("{}: {}", "Services".bold(), profile.services.len());
+                        println!("{}: {}", "Expertise".bold(), profile.expertise.len());
+                        println!("{}: {}", "Works".bold(), profile.works.len());
+                    }
+                }
+                Ok(())
+            }
+            Err(error) => {
+                print_error(&format!("Failed to get agent stats: {}", error));
+                Ok(())
+            }
+        },
+        AgentCommands::Services => match client.get_current_agent_profile().await {
+            Ok(profile) => {
+                if profile.services.is_empty() {
+                    println!("{}", "No services found.".yellow());
+                    return Ok(());
+                }
 
-        AgentCommands::Stats => {
-            match client.get_agent_stats().await {
-                Ok(stats) => {
-                    match format {
-                        crate::OutputFormat::Json => {
-                            println!("{}", serde_json::to_string_pretty(&stats)?);
-                        }
-                        _ => {
-                            println!("\n{}:\n", "Agent Statistics".bold().underline());
-                            if let Some(completed) = stats.get("totalTasksCompleted") {
-                                println!("{}: {}", "Tasks Completed".bold(), completed);
-                            }
-                            if let Some(success_rate) = stats.get("successRate") {
-                                println!("{}: {}%", "Success Rate".bold(), success_rate);
-                            }
-                            if let Some(response_time) = stats.get("avgResponseTime") {
-                                println!("{}: {} min", "Avg Response Time".bold(), response_time);
-                            }
+                match format {
+                    crate::OutputFormat::Json => {
+                        println!("{}", serde_json::to_string_pretty(&profile.services)?);
+                    }
+                    crate::OutputFormat::Yaml => {
+                        println!("{}", serde_yaml::to_string(&profile.services)?);
+                    }
+                    _ => {
+                        println!("\n{}:\n", "Services".bold().underline());
+                        for service in profile.services {
+                            let price = service
+                                .price
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| "-".to_string());
+                            let currency = service.currency.unwrap_or_else(|| "-".to_string());
+                            let days = service
+                                .delivery_days
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| "-".to_string());
+
+                            println!(
+                                "• {} | price: {} {} | delivery_days: {} | active: {}",
+                                service.name,
+                                price,
+                                currency,
+                                days,
+                                if service.is_active { "yes" } else { "no" }
+                            );
                         }
                     }
+                }
+                Ok(())
+            }
+            Err(error) => {
+                print_error(&format!("Failed to list services: {}", error));
+                Ok(())
+            }
+        },
+        AgentCommands::AddService {
+            name,
+            price,
+            currency,
+            days,
+            description,
+        } => {
+            let user = client.get_current_user().await?;
+            let body = CreateServiceRequest {
+                name,
+                description,
+                price: price.and_then(rust_decimal::Decimal::from_f64_retain),
+                currency,
+                delivery_days: days,
+            };
+
+            match client
+                .create_agent_service(&user.id.to_string(), body)
+                .await
+            {
+                Ok(_) => {
+                    print_success("Service added.");
                     Ok(())
                 }
-                Err(e) => {
-                    print_error(&format!("Failed to get agent stats: {}", e));
+                Err(error) => {
+                    print_error(&format!("Failed to add service: {}", error));
                     Ok(())
                 }
             }
         }
+    }
+}
 
-        AgentCommands::Services => {
-            match client.get::<Vec<serde_json::Value>>("/api/v1/agents/me/services").await {
-                Ok(services) => {
-                    if services.is_empty() {
-                        println!("{}", "No services found.".yellow());
-                        return Ok(());
-                    }
-
-                    match format {
-                        crate::OutputFormat::Json => {
-                            println!("{}", serde_json::to_string_pretty(&services)?);
-                        }
-                        _ => {
-                            println!("\n{}:\n", "Services".bold().underline());
-                            for service in services {
-                                println!("• {} - {} {}/{}",
-                                    service["name"].as_str().unwrap_or("Unknown"),
-                                    service["price"].as_i64().unwrap_or(0),
-                                    service["currency"].as_str().unwrap_or("CNY"),
-                                    service["unit"].as_str().unwrap_or("unit")
-                                );
-                            }
-                        }
-                    }
-                    Ok(())
-                }
-                Err(e) => {
-                    print_error(&format!("Failed to list services: {}", e));
-                    Ok(())
-                }
-            }
-        }
-
-        AgentCommands::AddService { name, price, unit, description } => {
-            let body = serde_json::json!({
-                "name": name,
-                "price": price,
-                "unit": unit,
-                "description": description,
-            });
-
-            match client.post::<serde_json::Value, _>("/api/v1/agents/me/services", Some(body)).await {
-                Ok(response) => {
-                    print_success("Service added!");
-                    println!("  {}: {}", "ID".bold(), response["id"]);
-                    Ok(())
-                }
-                Err(e) => {
-                    print_error(&format!("Failed to add service: {}", e));
-                    Ok(())
-                }
-            }
-        }
+fn ensure_authenticated(config: &Config) -> Result<()> {
+    if config.is_authenticated() {
+        Ok(())
+    } else {
+        anyhow::bail!("Not authenticated. Run 'agentlink auth login' first.")
     }
 }

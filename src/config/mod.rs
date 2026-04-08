@@ -42,7 +42,7 @@ fn default_server_url() -> String {
 }
 
 fn default_websocket_url() -> String {
-    "wss://api.agentlink.example.com".to_string()
+    "wss://ws.agentlink.example.com".to_string()
 }
 
 fn default_output_format() -> String {
@@ -96,8 +96,7 @@ impl Config {
                 .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
         }
 
-        let content = toml::to_string_pretty(self)
-            .context("Failed to serialize config")?;
+        let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
 
         std::fs::write(&config_path, content)
             .with_context(|| format!("Failed to write config file: {:?}", config_path))?;
@@ -107,16 +106,14 @@ impl Config {
 
     /// 获取默认配置文件路径
     pub fn default_config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Failed to get config directory")?;
+        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
 
         Ok(config_dir.join("agentlink").join("config.toml"))
     }
 
     /// 获取配置目录
     pub fn config_dir() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Failed to get config directory")?;
+        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
 
         Ok(config_dir.join("agentlink"))
     }

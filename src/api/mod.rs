@@ -6,16 +6,16 @@ use std::time::Duration;
 use crate::config::Config;
 use crate::models::ApiResponse;
 
-/// API 客户端
+mod generated;
+
 #[derive(Debug, Clone)]
 pub struct ApiClient {
     client: Client,
     base_url: String,
-    api_key: Option<String>,
+    auth_token: Option<String>,
 }
 
 impl ApiClient {
-    /// 创建新的 API 客户端
     pub fn new(config: &Config) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -25,354 +25,316 @@ impl ApiClient {
 
         Ok(Self {
             client,
-            base_url: config.server_url.clone(),
-            api_key: config.api_key.clone(),
+            base_url: config.server_url.trim_end_matches('/').to_string(),
+            auth_token: config.api_key.clone(),
         })
     }
 
-    /// 设置 API Key
-    pub fn with_api_key(mut self, api_key: String) -> Self {
-        self.api_key = Some(api_key);
+    pub fn with_auth_token(mut self, auth_token: String) -> Self {
+        self.auth_token = Some(auth_token);
         self
     }
 
-    /// 构建请求
     fn build_request(&self, method: Method, path: &str) -> RequestBuilder {
         let url = format!("{}{}", self.base_url, path);
         let mut request = self.client.request(method, &url);
 
-        // 添加认证头
-        // 支持两种 token 类型：
-        // - sk_ 前缀：API Key，走 API Key 鉴权逻辑
-        // - jwt_ 前缀：JWT Token，走 JWT 鉴权逻辑
-        if let Some(ref token) = self.api_key {
+        if let Some(token) = &self.auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
 
-        // 添加默认头
-        request = request
-            .header("Accept", "application/json")
-            .header("User-Agent", format!("agentlink-cli/{}", env!("CARGO_PKG_VERSION")));
-
-        request
+        request.header("Accept", "application/json").header(
+            "User-Agent",
+            format!("agentlink-cli/{}", env!("CARGO_PKG_VERSION")),
+        )
     }
 
-    /// 发送 GET 请求
     pub async fn get<T>(&self, path: &str) -> Result<T>
     where
         T: DeserializeOwned,
     {
-        let request = self.build_request(Method::GET, path);
-        self.send_request(request).await
+        self.send_json(self.build_request(Method::GET, path)).await
     }
 
-    /// 发送 POST 请求
+    pub async fn get_with_query<T, Q>(&self, path: &str, query: &Q) -> Result<T>
+    where
+        T: DeserializeOwned,
+        Q: Serialize,
+    {
+        self.send_json(self.build_request(Method::GET, path).query(query))
+            .await
+    }
+
     pub async fn post<T, B>(&self, path: &str, body: Option<B>) -> Result<T>
     where
         T: DeserializeOwned,
         B: Serialize,
     {
         let mut request = self.build_request(Method::POST, path);
-
         if let Some(body) = body {
             request = request.json(&body);
         }
 
-        self.send_request(request).await
+        self.send_json(request).await
     }
 
-    /// 发送 PUT 请求
+    pub async fn post_stream<B>(&self, path: &str, body: Option<B>) -> Result<Response>
+    where
+        B: Serialize,
+    {
+        let mut request = self.build_request(Method::POST, path);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+
+        self.send_stream(request).await
+    }
+
     pub async fn put<T, B>(&self, path: &str, body: Option<B>) -> Result<T>
     where
         T: DeserializeOwned,
         B: Serialize,
     {
         let mut request = self.build_request(Method::PUT, path);
-
         if let Some(body) = body {
             request = request.json(&body);
         }
 
-        self.send_request(request).await
+        self.send_json(request).await
     }
 
-    /// 发送 DELETE 请求
     pub async fn delete<T>(&self, path: &str) -> Result<T>
     where
         T: DeserializeOwned,
     {
-        let request = self.build_request(Method::DELETE, path);
-        self.send_request(request).await
+        self.send_json(self.build_request(Method::DELETE, path))
+            .await
     }
 
-    /// 发送请求并处理响应
-    async fn send_request<T>(&self, request: RequestBuilder) -> Result<T>
+    pub async fn delete_no_data(&self, path: &str) -> Result<()> {
+        self.send_without_data(self.build_request(Method::DELETE, path))
+            .await
+    }
+
+    pub async fn post_no_data<B>(&self, path: &str, body: Option<B>) -> Result<()>
+    where
+        B: Serialize,
+    {
+        let mut request = self.build_request(Method::POST, path);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+
+        self.send_without_data(request).await
+    }
+
+    pub async fn put_no_data<B>(&self, path: &str, body: Option<B>) -> Result<()>
+    where
+        B: Serialize,
+    {
+        let mut request = self.build_request(Method::PUT, path);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+
+        self.send_without_data(request).await
+    }
+
+    async fn send_json<T>(&self, request: RequestBuilder) -> Result<T>
     where
         T: DeserializeOwned,
     {
+        let response = request.send().await.context("Failed to send request")?;
+
+        self.handle_json_response(response).await
+    }
+
+    async fn send_without_data(&self, request: RequestBuilder) -> Result<()> {
+        let response = request.send().await.context("Failed to send request")?;
+
+        self.handle_empty_success(response).await
+    }
+
+    async fn send_stream(&self, request: RequestBuilder) -> Result<Response> {
         let response = request
+            .header("Accept", "text/event-stream")
             .send()
             .await
             .context("Failed to send request")?;
 
-        self.handle_response(response).await
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Self::http_error(status.as_u16(), &body);
+        }
+
+        Ok(response)
     }
 
-    /// 处理响应
-    async fn handle_response<T>(&self, response: Response) -> Result<T>
+    async fn handle_json_response<T>(&self, response: Response) -> Result<T>
     where
         T: DeserializeOwned,
     {
         let status = response.status();
+        let body = response.text().await.unwrap_or_default();
 
-        if status.is_success() {
-            let api_response: ApiResponse<T> = response
-                .json()
-                .await
-                .context("Failed to parse response")?;
+        if !status.is_success() {
+            return Self::http_error(status.as_u16(), &body);
+        }
 
-            if api_response.success {
-                api_response
-                    .data
-                    .context("Response data is empty")
-            } else {
-                let error = api_response
-                    .error
-                    .map(|e| e.message)
-                    .unwrap_or_else(|| "Unknown error".to_string());
-                anyhow::bail!("API error: {}", error)
-            }
+        let api_response: ApiResponse<T> =
+            serde_json::from_str(&body).context("Failed to parse API response")?;
+
+        if api_response.success {
+            api_response.data.context("Response data is empty")
         } else {
-            let text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-
-            match status.as_u16() {
-                401 => anyhow::bail!("Authentication failed. Please check your API key."),
-                403 => anyhow::bail!("Permission denied."),
-                404 => anyhow::bail!("Resource not found."),
-                422 => anyhow::bail!("Validation error: {}", text),
-                429 => anyhow::bail!("Rate limit exceeded. Please try again later."),
-                _ => anyhow::bail!("HTTP error {}: {}", status, text),
-            }
+            let message = api_response
+                .error
+                .map(|error| error.message)
+                .or(api_response.message)
+                .unwrap_or_else(|| "Unknown API error".to_string());
+            anyhow::bail!("API error: {}", message);
         }
     }
 
-    // ==================== 认证 API ====================
+    async fn handle_empty_success(&self, response: Response) -> Result<()> {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
 
-    /// 验证 API Key / JWT Token
-    pub async fn verify_api_key(&self) -> Result<crate::models::User> {
-        self.get("/api/v1/users/me").await
+        if !status.is_success() {
+            return Self::http_error(status.as_u16(), &body);
+        }
+
+        if body.trim().is_empty() {
+            return Ok(());
+        }
+
+        let api_response: ApiResponse<serde_json::Value> =
+            serde_json::from_str(&body).context("Failed to parse API response")?;
+
+        if api_response.success {
+            Ok(())
+        } else {
+            let message = api_response
+                .error
+                .map(|error| error.message)
+                .or(api_response.message)
+                .unwrap_or_else(|| "Unknown API error".to_string());
+            anyhow::bail!("API error: {}", message);
+        }
     }
 
-    /// 发送验证码
-    pub async fn send_verification_code(&self, email: &str) -> Result<serde_json::Value> {
-        let body = serde_json::json!({
-            "email": email,
-        });
-        self.post("/api/v1/auth/send-code", Some(body)).await
+    fn http_error<T>(status: u16, body: &str) -> Result<T> {
+        match status {
+            401 => anyhow::bail!("Authentication failed. Please check your token."),
+            403 => anyhow::bail!("Permission denied."),
+            404 => anyhow::bail!("Resource not found."),
+            422 => anyhow::bail!("Validation error: {}", body),
+            429 => anyhow::bail!("Rate limit exceeded. Please try again later."),
+            _ => anyhow::bail!("HTTP error {}: {}", status, body),
+        }
     }
 
-    /// 一键登录/注册
-    pub async fn magic_login(&self, email: &str, code: &str) -> Result<crate::models::AuthResponse> {
-        let body = serde_json::json!({
-            "email": email,
-            "code": code,
-        });
-        self.post("/api/v1/auth/magic-login", Some(body)).await
+    pub async fn verify_token(&self) -> Result<agentlink_protocol::user::UserResponse> {
+        self.get_current_user().await
     }
 
-    /// 完成 Onboarding
-    pub async fn complete_onboarding(&self, display_name: &str) -> Result<crate::models::User> {
-        let body = serde_json::json!({
-            "display_name": display_name,
-        });
-        self.post("/api/v1/auth/complete-onboarding", Some(body)).await
+    pub async fn get_user(&self, user_id: &str) -> Result<agentlink_protocol::user::UserResponse> {
+        self.get_user_by_id(user_id).await
     }
 
-    // ==================== 用户 API ====================
+    pub async fn get_task(&self, task_id: &str) -> Result<agentlink_protocol::task::TaskResponse> {
+        self.get_task_by_id(task_id).await
+    }
 
-    /// 获取用户列表
-    pub async fn list_users(
+    pub async fn list_connections(
         &self,
-        page: Option<i64>,
-        per_page: Option<i64>,
-    ) -> Result<crate::models::PaginatedResponse<crate::models::User>> {
-        let mut path = "/api/v1/users".to_string();
-        let mut params = vec![];
-
-        if let Some(p) = page {
-            params.push(format!("page={}", p));
-        }
-        if let Some(pp) = per_page {
-            params.push(format!("per_page={}", pp));
-        }
-
-        if !params.is_empty() {
-            path.push('?');
-            path.push_str(&params.join("&"));
-        }
-
-        self.get(&path).await
+    ) -> Result<Vec<agentlink_protocol::network::ConnectionResponse>> {
+        self.get_connections().await
     }
 
-    /// 获取用户详情
-    pub async fn get_user(&self, user_id: &str) -> Result<crate::models::User> {
-        self.get(&format!("/api/v1/users/{}", user_id)).await
-    }
-
-    // ==================== 任务 API ====================
-
-    /// 获取任务列表
-    pub async fn list_tasks(
+    pub async fn send_connection_request(
         &self,
-        page: Option<i64>,
-        per_page: Option<i64>,
-    ) -> Result<crate::models::PaginatedResponse<crate::models::Task>> {
-        let mut path = "/api/v1/tasks".to_string();
-        let mut params = vec![];
-
-        if let Some(p) = page {
-            params.push(format!("page={}", p));
-        }
-        if let Some(pp) = per_page {
-            params.push(format!("per_page={}", pp));
-        }
-
-        if !params.is_empty() {
-            path.push('?');
-            path.push_str(&params.join("&"));
-        }
-
-        self.get(&path).await
+        body: agentlink_protocol::network::SendConnectionRequest,
+    ) -> Result<agentlink_protocol::network::ConnectionRequestResponse> {
+        self.send_request(body).await
     }
 
-    /// 获取任务详情
-    pub async fn get_task(&self, task_id: &str) -> Result<crate::models::Task> {
-        self.get(&format!("/api/v1/tasks/{}", task_id)).await
-    }
-
-    /// 申请任务
-    pub async fn apply_to_task<B>(
+    pub async fn list_pending_requests(
         &self,
-        task_id: &str,
-        body: B,
-    ) -> Result<crate::models::Application>
-    where
-        B: Serialize,
-    {
-        self.post(&format!("/api/v1/tasks/{}/apply", task_id), Some(body))
+    ) -> Result<Vec<agentlink_protocol::network::ConnectionRequestResponse>> {
+        self.get_pending_requests().await
+    }
+
+    pub async fn get_network_stats(&self) -> Result<agentlink_protocol::network::NetworkStats> {
+        self.get_stats(agentlink_protocol::network::NetworkStatsQuery { user_id: None })
             .await
     }
 
-    // ==================== 消息 API ====================
-
-    /// 获取会话列表
-    pub async fn list_conversations(
-        &self,
-    ) -> Result<Vec<crate::models::Conversation>> {
-        self.get("/api/v1/conversations").await
-    }
-
-    /// 获取消息列表
-    pub async fn get_messages(
-        &self,
-        conversation_id: &str,
-    ) -> Result<Vec<crate::models::Message>> {
-        self.get(&format!("/api/v1/conversations/{}/messages", conversation_id))
-            .await
-    }
-
-    /// 发送消息
-    pub async fn send_message<B>(
-        &self,
-        conversation_id: &str,
-        body: B,
-    ) -> Result<crate::models::Message>
-    where
-        B: Serialize,
-    {
-        self.post(&format!("/api/v1/conversations/{}/messages", conversation_id), Some(body))
-            .await
-    }
-
-    // ==================== 通知 API ====================
-
-    /// 获取通知列表
     pub async fn list_notifications(
         &self,
         unread_only: bool,
-    ) -> Result<Vec<crate::models::Notification>> {
-        let path = if unread_only {
-            "/api/v1/notifications?unread_only=true"
-        } else {
-            "/api/v1/notifications"
-        };
-        self.get(path).await
+    ) -> Result<Vec<agentlink_protocol::message::NotificationResponse>> {
+        self.get_notifications(agentlink_protocol::message::NotificationQuery {
+            unread_only: Some(unread_only),
+            page: None,
+            per_page: None,
+        })
+        .await
     }
 
-    /// 标记通知已读
-    pub async fn mark_notification_read(&self, notification_id: &str) -> Result<()> {
-        self.post::<serde_json::Value, _>(
-            &format!("/api/v1/notifications/{}/read", notification_id),
-            None::<serde_json::Value>,
+    pub async fn mark_notification_read(
+        &self,
+        notification_id: &str,
+    ) -> Result<agentlink_protocol::message::NotificationReadResponse> {
+        self.mark_notification_as_read(notification_id).await
+    }
+
+    pub async fn mark_all_notifications_read(
+        &self,
+    ) -> Result<agentlink_protocol::message::MarkAllNotificationsReadResponse> {
+        self.mark_all_notifications_as_read().await
+    }
+
+    pub async fn get_agent_profile(
+        &self,
+        agent_id: &str,
+    ) -> Result<agentlink_protocol::agent::AgentProfileResponse> {
+        self.get_profile(agent_id).await
+    }
+
+    pub async fn get_current_agent_profile(
+        &self,
+    ) -> Result<agentlink_protocol::agent::AgentProfileResponse> {
+        let user = self.get_current_user().await?;
+        self.get_profile(&user.id.to_string()).await
+    }
+
+    pub async fn create_agent_service(
+        &self,
+        agent_id: &str,
+        body: agentlink_protocol::agent::CreateServiceRequest,
+    ) -> Result<agentlink_protocol::agent::AgentServiceResponse> {
+        self.create_service(agent_id, body).await
+    }
+
+    pub async fn update_agent_availability(
+        &self,
+        agent_id: &str,
+        is_available: bool,
+    ) -> Result<agentlink_protocol::agent::AgentProfileResponse> {
+        self.update_agent(
+            agent_id,
+            agentlink_protocol::agent::UpdateAgentRequest {
+                linkid: None,
+                avatar_url: None,
+                display_name: None,
+                description: None,
+                specialty: None,
+                is_available: Some(is_available),
+            },
         )
-        .await?;
-        Ok(())
-    }
-
-    // ==================== 人脉 API ====================
-
-    /// 获取人脉列表
-    pub async fn list_connections(&self) -> Result<Vec<crate::models::Connection>> {
-        self.get("/api/v1/network/connections").await
-    }
-
-    /// 获取待处理请求
-    pub async fn list_pending_requests(
-        &self,
-    ) -> Result<Vec<crate::models::ConnectionRequest>> {
-        self.get("/api/v1/network/requests").await
-    }
-
-    /// 发送人脉请求
-    pub async fn send_connection_request<B>(
-        &self,
-        body: B,
-    ) -> Result<serde_json::Value>
-    where
-        B: Serialize,
-    {
-        self.post("/api/v1/network/requests", Some(body)).await
-    }
-
-    /// 响应人脉请求
-    pub async fn respond_to_request<B>(
-        &self,
-        request_id: &str,
-        body: B,
-    ) -> Result<serde_json::Value>
-    where
-        B: Serialize,
-    {
-        self.post(&format!("/api/v1/network/requests/{}/respond", request_id), Some(body))
-            .await
-    }
-
-    // ==================== Agent API ====================
-
-    /// 获取 Agent 统计
-    pub async fn get_agent_stats(&self) -> Result<serde_json::Value> {
-        self.get("/api/v1/agents/me/stats").await
-    }
-
-    /// 更新 Agent 状态
-    pub async fn update_agent_status<B>(&self, body: B) -> Result<serde_json::Value>
-    where
-        B: Serialize,
-    {
-        self.put("/api/v1/agents/me/status", Some(body)).await
+        .await
     }
 }
 
