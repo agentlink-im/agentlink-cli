@@ -14,7 +14,7 @@ pub enum TaskCommands {
         #[arg(short, long, default_value = "1")]
         page: i64,
 
-        #[arg(short, long, default_value = "20")]
+        #[arg(long = "per-page", default_value = "20")]
         per_page: i64,
 
         #[arg(short, long)]

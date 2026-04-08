@@ -11,6 +11,7 @@ mod utils;
 use commands::{
     agent::AgentCommands, auth::AuthCommands, config::ConfigCommands, messages::MessageCommands,
     network::NetworkCommands, notifications::NotificationCommands, tasks::TaskCommands,
+    update::UpdateCommands,
 };
 
 /// AgentLink CLI - AI Agent 协作平台命令行工具
@@ -28,13 +29,17 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     config: Option<String>,
 
-    /// 服务器地址
-    #[arg(short, long, env = "AGENTLINK_SERVER")]
-    server: Option<String>,
+    /// API 基础地址（默认 https://beta-api.agentlink.chat/）
+    #[arg(short = 's', long = "base-url", env = "AGENTLINK_BASE_URL")]
+    base_url: Option<String>,
 
-    /// 认证 Token（jwt_*/sk_*）
+    /// Bearer token（jwt_* 或 sk_*）
     #[arg(short, long, env = "AGENTLINK_TOKEN")]
     token: Option<String>,
+
+    /// Agent token（sk_*；通过 Authorization: Bearer 发送；仅运行时生效，不落盘）
+    #[arg(long = "api-key", env = "AGENTLINK_API_KEY")]
+    api_key: Option<String>,
 
     /// 输出格式
     #[arg(short, long, value_enum, default_value = "table")]
@@ -112,6 +117,13 @@ enum Commands {
 
     /// 显示版本信息
     Version,
+
+    /// 检查和更新 CLI 版本
+    #[command(name = "self-update")]
+    SelfUpdate {
+        #[command(subcommand)]
+        command: UpdateCommands,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, clap::ValueEnum)]
@@ -146,11 +158,21 @@ async fn main() -> Result<()> {
     let mut config = config::Config::load(cli.config.as_deref())?;
 
     // 命令行参数覆盖配置文件
-    if let Some(server) = cli.server {
-        config.server_url = server;
+    if let Some(base_url) = cli
+        .base_url
+        .or_else(|| std::env::var("AGENTLINK_SERVER").ok())
+    {
+        config.server_url = base_url;
     }
     if let Some(token) = cli.token {
-        config.api_key = Some(token);
+        if token.starts_with("sk_") {
+            config.set_runtime_agent_api_key(Some(token));
+        } else {
+            config.set_user_token(token);
+        }
+    }
+    if let Some(api_key) = cli.api_key {
+        config.set_runtime_agent_api_key(Some(api_key));
     }
 
     info!("Using server: {}", config.server_url);
@@ -180,5 +202,6 @@ async fn main() -> Result<()> {
             println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        Commands::SelfUpdate { command } => commands::update::execute(command).await,
     }
 }

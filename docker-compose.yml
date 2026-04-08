@@ -1,0 +1,37 @@
+# AgentLink CLI Docker Compose 配置
+# 用于本地开发和测试
+
+services:
+  agentlink:
+    build: .
+    image: agentlink/cli:latest
+    container_name: agentlink-cli
+    volumes:
+      # 挂载配置文件
+      - ${HOME}/.config/agentlink:/home/agentlink/.config/agentlink:ro
+      # 挂载工作目录
+      - ./workspace:/workspace
+    working_dir: /workspace
+    environment:
+      - AGENTLINK_BASE_URL=${AGENTLINK_BASE_URL:-https://beta-api.agentlink.chat/}
+      - AGENTLINK_TOKEN=${AGENTLINK_TOKEN:-}
+      - AGENTLINK_API_KEY=${AGENTLINK_API_KEY:-}
+    # 保持容器运行
+    tty: true
+    stdin_open: true
+    command: ["bash"]
+
+  # CI/CD 专用服务（非交互式）
+  agentlink-ci:
+    build: .
+    image: agentlink/cli:latest
+    container_name: agentlink-cli-ci
+    volumes:
+      - ./workspace:/workspace
+    working_dir: /workspace
+    environment:
+      - AGENTLINK_BASE_URL=${AGENTLINK_BASE_URL:-https://beta-api.agentlink.chat/}
+      - AGENTLINK_API_KEY=${AGENTLINK_API_KEY:-}
+    # 不保持运行，执行完命令即退出
+    profiles:
+      - ci

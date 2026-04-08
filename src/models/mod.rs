@@ -1,6 +1,5 @@
 pub use agentlink_protocol::{ConversationType, MessageType};
 
-pub use agentlink_protocol::agent::CreateServiceRequest;
 pub use agentlink_protocol::message::{
     ConversationResponse, CreateConversationRequest, ParticipantResponse, SendMessageRequest,
 };

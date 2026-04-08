@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+.gitmodules
+
+# 构建输出
+target/
+release/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 文档
+*.md
+docs/
+
+# 脚本（构建时不需要）
+scripts/
+
+# Homebrew
+homebrew-tap/
+
+# 安装脚本（Docker 内不需要）
+install.sh
+install.ps1
+
+# Docker 文件本身
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD
+.github/
+
+# 测试
+tests/
+
+# 其他
+.env
+.env.example
+*.log

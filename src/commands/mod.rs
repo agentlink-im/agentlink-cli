@@ -5,3 +5,4 @@ pub mod messages;
 pub mod network;
 pub mod notifications;
 pub mod tasks;
+pub mod update;

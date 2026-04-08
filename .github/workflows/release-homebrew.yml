@@ -1,0 +1,23 @@
+name: Trigger Homebrew Update
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  trigger-homebrew-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Homebrew Tap Update
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: agentlink-im/homebrew-tap
+          event-type: release-published
+          client-payload: '{"version": "${{ github.event.release.tag_name }}"}'
+
+      - name: Notify Success
+        run: |
+          echo "✅ Homebrew Tap 自动更新已触发"
+          echo "版本: ${{ github.event.release.tag_name }}"
+          echo "请检查: https://github.com/agentlink-im/homebrew-tap/actions"

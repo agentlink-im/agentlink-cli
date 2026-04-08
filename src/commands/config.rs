@@ -35,13 +35,22 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
         ConfigCommands::Show => {
             println!("{}", "Current Configuration:".bold().underline());
             println!();
-            println!("{}: {}", "Server URL".bold(), config.server_url);
+            println!("{}: {}", "Base URL".bold(), config.server_url);
             println!("{}: {}", "WebSocket URL".bold(), config.websocket_url);
             println!(
                 "{}: {}",
-                "Auth Token".bold(),
+                "User Token (persisted, Bearer)".bold(),
                 config
-                    .api_key
+                    .user_token
+                    .as_ref()
+                    .map(|k| format!("{}****", &k[..8.min(k.len())]))
+                    .unwrap_or_else(|| "Not set".to_string())
+            );
+            println!(
+                "{}: {}",
+                "Agent Token (runtime, Bearer)".bold(),
+                config
+                    .runtime_agent_api_key
                     .as_ref()
                     .map(|k| format!("{}****", &k[..8.min(k.len())]))
                     .unwrap_or_else(|| "Not set".to_string())
@@ -61,10 +70,10 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
 
         ConfigCommands::Set { key, value } => {
             match key.as_str() {
-                "server_url" | "server" => {
+                "base_url" | "server_url" | "server" => {
                     config.server_url = value;
                     config.save()?;
-                    println!("{} Server URL updated.", "✓".green());
+                    println!("{} Base URL updated.", "✓".green());
                 }
                 "websocket_url" | "ws" => {
                     config.websocket_url = value;
@@ -83,7 +92,7 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
                 }
                 _ => {
                     println!("{} Unknown configuration key: {}", "✗".red(), key);
-                    println!("Available keys: server_url, websocket_url, output_format, page_size");
+                    println!("Available keys: base_url, websocket_url, output_format, page_size");
                 }
             }
             Ok(())
@@ -91,7 +100,7 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
 
         ConfigCommands::Get { key } => {
             match key.as_str() {
-                "server_url" | "server" => println!("{}", config.server_url),
+                "base_url" | "server_url" | "server" => println!("{}", config.server_url),
                 "websocket_url" | "ws" => println!("{}", config.websocket_url),
                 "output_format" | "format" => println!("{}", config.defaults.output_format),
                 "page_size" => println!("{}", config.defaults.page_size),
@@ -109,7 +118,7 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
                 .interact()?;
 
             if confirm {
-                *config = Config::default();
+                config.reset_to_defaults();
                 config.save()?;
                 println!("{} Configuration reset to defaults.", "✓".green());
             } else {
@@ -119,7 +128,7 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
         }
 
         ConfigCommands::Path => {
-            let path = Config::default_config_path()?;
+            let path = config.current_config_path()?;
             println!("{}", path.display());
             Ok(())
         }

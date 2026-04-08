@@ -10,7 +10,7 @@ use crate::utils::output::{print_success, print_user_info, print_warning};
 pub enum AuthCommands {
     /// 登录并保存认证 token
     Login {
-        /// 直接提供 jwt_/sk_ token
+        /// 直接提供人类用户 token（jwt_*）
         #[arg(long)]
         token: Option<String>,
 
@@ -61,7 +61,7 @@ pub async fn execute(command: AuthCommands, config: &mut Config) -> Result<()> {
             Ok(())
         }
         AuthCommands::OnboardingStatus => {
-            ensure_authenticated(config)?;
+            ensure_user_authenticated(config)?;
             let client = ApiClient::new(config)?;
             let response = client.get_onboarding_status().await?;
             println!(
@@ -76,7 +76,7 @@ pub async fn execute(command: AuthCommands, config: &mut Config) -> Result<()> {
             Ok(())
         }
         AuthCommands::CompleteOnboarding { linkid } => {
-            ensure_authenticated(config)?;
+            ensure_user_authenticated(config)?;
             let client = ApiClient::new(config)?;
             let response = client
                 .complete_onboarding(agentlink_protocol::auth::UpdateLinkidRequest { linkid })
@@ -86,21 +86,26 @@ pub async fn execute(command: AuthCommands, config: &mut Config) -> Result<()> {
             Ok(())
         }
         AuthCommands::Logout => {
-            if !config.is_authenticated() {
-                println!("{}", "You are not logged in.".yellow());
+            if !config.has_user_token() {
+                println!("{}", "No persisted user session found.".yellow());
                 return Ok(());
             }
 
-            config.clear_auth();
+            config.clear_user_token();
             config.save()?;
 
-            print_success("Successfully logged out.");
+            print_success("Successfully logged out user session.");
             Ok(())
         }
         AuthCommands::Whoami => {
-            if !config.is_authenticated() {
-                println!("{}", "You are not logged in.".yellow());
-                println!("Run {} to authenticate.", "agentlink auth login".cyan());
+            if !config.has_user_token() {
+                println!("{}", "You are not logged in as a user.".yellow());
+                println!(
+                    "Use {} for user login or set {} / {} for an agent bearer token.",
+                    "agentlink auth login".cyan(),
+                    "AGENTLINK_API_KEY".cyan(),
+                    "--api-key".cyan()
+                );
                 return Ok(());
             }
 
@@ -118,10 +123,10 @@ pub async fn execute(command: AuthCommands, config: &mut Config) -> Result<()> {
             }
         }
         AuthCommands::Verify => {
-            ensure_authenticated(config)?;
+            ensure_user_authenticated(config)?;
             let client = ApiClient::new(config)?;
             client.verify_token().await?;
-            print_success("Token is valid.");
+            print_success("User token is valid.");
             Ok(())
         }
     }
@@ -129,9 +134,15 @@ pub async fn execute(command: AuthCommands, config: &mut Config) -> Result<()> {
 
 async fn login(config: &mut Config, token: Option<String>, email: Option<String>) -> Result<()> {
     if let Some(token) = token {
-        let client = ApiClient::new(config)?.with_auth_token(token.clone());
+        if token.starts_with("sk_") {
+            anyhow::bail!(
+                "Agent sk_* tokens are runtime-only. Pass them via AGENTLINK_API_KEY, --api-key, or --token so the CLI can send Authorization: Bearer <token>."
+            );
+        }
+
+        let client = ApiClient::new(config)?.with_bearer_token(token.clone());
         let user = client.verify_token().await?;
-        config.set_api_key(token);
+        config.set_user_token(token);
         config.save()?;
         print_success("Successfully authenticated.");
         print_user_info(&user);
@@ -165,7 +176,7 @@ async fn login(config: &mut Config, token: Option<String>, email: Option<String>
     let login_response = client
         .magic_login(agentlink_protocol::auth::MagicLoginRequest { email, code })
         .await?;
-    config.set_api_key(login_response.token.clone());
+    config.set_user_token(login_response.token.clone());
     config.save()?;
 
     print_success("Successfully authenticated.");
@@ -178,10 +189,10 @@ async fn login(config: &mut Config, token: Option<String>, email: Option<String>
     Ok(())
 }
 
-fn ensure_authenticated(config: &Config) -> Result<()> {
-    if config.is_authenticated() {
+fn ensure_user_authenticated(config: &Config) -> Result<()> {
+    if config.has_user_token() {
         Ok(())
     } else {
-        anyhow::bail!("Not authenticated. Run 'agentlink auth login' first.")
+        anyhow::bail!("No user session found. Run 'agentlink auth login' first.")
     }
 }

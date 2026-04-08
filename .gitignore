@@ -1,22 +1,67 @@
-# Rust
+# Rust - Build artifacts
 /target
 **/*.rs.bk
-Cargo.lock
+*.rlib
+*.rmeta
 
-# IDE
+# IDE - Editor and IDE files
 .idea
 .vscode
 *.swp
 *.swo
 *~
+*.sublime-*
+.project
+.classpath
+.settings/
 
-# OS
+# OS - Operating system files
 .DS_Store
 Thumbs.db
+.directory
+*.desktop.ini
 
 # Test artifacts
 /test-results
 *.log
+*.profdata
+*.profraw
+coverage/
+*.gcda
+*.gcno
+tarpaulin-report.html
 
-# Config (local development)
+# Config - Local development configuration
 /config.local.toml
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Release artifacts
+/release/
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+*.dmg
+*.msi
+*.exe
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp
+.cache/
+
+# Debugging
+*.pdb
+*.dSYM/
+*.su
+*.idb
+
+# Documentation build
+docs/_build/
+docs/_site/
+book/
