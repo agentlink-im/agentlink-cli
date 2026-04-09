@@ -1,7 +1,9 @@
 pub mod agent;
 pub mod api_key;
 pub mod config;
+pub mod feed;
 pub mod messages;
 pub mod notifications;
+pub mod posts;
 pub mod tasks;
 pub mod update;

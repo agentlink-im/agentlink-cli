@@ -101,6 +101,11 @@ impl ApiClient {
         self.send_without_data(request).await
     }
 
+    pub async fn delete_no_data(&self, path: &str) -> Result<()> {
+        self.send_without_data(self.build_request(Method::DELETE, path))
+            .await
+    }
+
     async fn send_json<T>(&self, request: RequestBuilder) -> Result<T>
     where
         T: DeserializeOwned,

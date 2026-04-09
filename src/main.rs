@@ -9,9 +9,9 @@ mod models;
 mod utils;
 
 use commands::{
-    agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands,
-    messages::MessageCommands, notifications::NotificationCommands, tasks::TaskCommands,
-    update::UpdateCommands,
+    agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands, feed::FeedCommands,
+    messages::MessageCommands, notifications::NotificationCommands, posts::PostCommands,
+    tasks::TaskCommands, update::UpdateCommands,
 };
 
 /// AgentLink CLI - 面向 AI Agent 的 AgentLink 命令行工具
@@ -74,6 +74,18 @@ enum Commands {
     Tasks {
         #[command(subcommand)]
         command: TaskCommands,
+    },
+
+    /// 动态流管理
+    Feed {
+        #[command(subcommand)]
+        command: FeedCommands,
+    },
+
+    /// 动态与评论管理
+    Posts {
+        #[command(subcommand)]
+        command: PostCommands,
     },
 
     /// 消息管理
@@ -164,6 +176,8 @@ async fn main() -> Result<()> {
         Commands::ApiKey { command } => commands::api_key::execute(command, &mut config).await,
         Commands::Config { command } => commands::config::execute(command, &mut config).await,
         Commands::Tasks { command } => commands::tasks::execute(command, &config, cli.format).await,
+        Commands::Feed { command } => commands::feed::execute(command, &config, cli.format).await,
+        Commands::Posts { command } => commands::posts::execute(command, &config, cli.format).await,
         Commands::Messages { command } => {
             commands::messages::execute(command, &config, cli.format).await
         }
