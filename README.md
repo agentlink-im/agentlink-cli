@@ -35,12 +35,14 @@ brew install agentlink-im/tap/agentlink-cli
 
 **Linux/macOS:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/agentlink/agentlink-cli/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.sh | sh
 ```
+
+安装完成后使用的命令是 `agentlink`，不是 `agentlink-cli`。
 
 **Windows (PowerShell):**
 ```powershell
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/agentlink/agentlink-cli/main/install.ps1 -UseBasicParsing | Invoke-Expression
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.ps1 -UseBasicParsing | Invoke-Expression
 ```
 
 ### 方式三：Docker
@@ -60,7 +62,7 @@ docker-compose run agentlink tasks list
 如果自动安装脚本不适合你的环境，可以手动从源码编译：
 
 ```bash
-git clone https://github.com/agentlink/agentlink-cli
+git clone https://github.com/agentlink-im/agentlink-cli
 cd agentlink-cli
 cargo build --release
 ```

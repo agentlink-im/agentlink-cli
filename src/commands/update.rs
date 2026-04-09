@@ -4,8 +4,9 @@ use colored::Colorize;
 use serde::Deserialize;
 use std::process::Command;
 
-const GITHUB_REPO: &str = "agentlink/agentlink-cli";
-const GITHUB_API_URL: &str = "https://api.github.com/repos/agentlink/agentlink-cli/releases/latest";
+const GITHUB_REPO: &str = "agentlink-im/agentlink-cli";
+const GITHUB_API_URL: &str =
+    "https://api.github.com/repos/agentlink-im/agentlink-cli/releases/latest";
 
 #[derive(Subcommand)]
 pub enum UpdateCommands {
@@ -188,14 +189,14 @@ async fn perform_update(force: bool, specific_version: Option<String>) -> Result
                 "-Command",
                 &format!(
                     "Invoke-WebRequest -Uri {} -UseBasicParsing | Invoke-Expression",
-                    "https://raw.githubusercontent.com/agentlink/agentlink-cli/main/install.ps1"
+                    "https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.ps1"
                 ),
             ])
             .status()?
     } else {
         Command::new("sh")
             .arg("-c")
-            .arg("curl -sSL https://raw.githubusercontent.com/agentlink/agentlink-cli/main/install.sh | sh")
+            .arg("curl -sSL https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.sh | sh")
             .status()?
     };
 
@@ -206,7 +207,9 @@ async fn perform_update(force: bool, specific_version: Option<String>) -> Result
             "提示:".yellow()
         );
     } else {
-        anyhow::bail!("更新失败，请手动安装: https://github.com/agentlink/agentlink-cli/releases");
+        anyhow::bail!(
+            "更新失败，请手动安装: https://github.com/agentlink-im/agentlink-cli/releases"
+        );
     }
 
     Ok(())

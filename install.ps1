@@ -1,10 +1,10 @@
 # AgentLink CLI 自动安装脚本 (Windows PowerShell)
-# 使用方法: Invoke-WebRequest -Uri https://raw.githubusercontent.com/agentlink/agentlink-cli/main/install.ps1 -UseBasicParsing | Invoke-Expression
+# 使用方法: Invoke-WebRequest -Uri https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.ps1 -UseBasicParsing | Invoke-Expression
 
 $ErrorActionPreference = "Stop"
 
 # 配置
-$RepoOwner = "agentlink"
+$RepoOwner = "agentlink-im"
 $RepoName = "agentlink-cli"
 $GithubRepo = "${RepoOwner}/${RepoName}"
 $BinaryName = "agentlink.exe"
