@@ -39,20 +39,16 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
             println!("{}: {}", "WebSocket URL".bold(), config.websocket_url);
             println!(
                 "{}: {}",
-                "User Token (persisted, Bearer)".bold(),
+                "Saved Agent API Key".bold(),
                 config
-                    .user_token
-                    .as_ref()
-                    .map(|k| format!("{}****", &k[..8.min(k.len())]))
+                    .saved_api_key_preview()
                     .unwrap_or_else(|| "Not set".to_string())
             );
             println!(
                 "{}: {}",
-                "Agent Token (runtime, Bearer)".bold(),
+                "Runtime API Key Override".bold(),
                 config
-                    .runtime_agent_api_key
-                    .as_ref()
-                    .map(|k| format!("{}****", &k[..8.min(k.len())]))
+                    .runtime_api_key_preview()
                     .unwrap_or_else(|| "Not set".to_string())
             );
             println!(
@@ -75,6 +71,11 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
                     config.save()?;
                     println!("{} Base URL updated.", "✓".green());
                 }
+                "api_key" => {
+                    config.set_api_key(value)?;
+                    config.save()?;
+                    println!("{} Agent API key updated.", "✓".green());
+                }
                 "websocket_url" | "ws" => {
                     config.websocket_url = value;
                     config.save()?;
@@ -92,7 +93,9 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
                 }
                 _ => {
                     println!("{} Unknown configuration key: {}", "✗".red(), key);
-                    println!("Available keys: base_url, websocket_url, output_format, page_size");
+                    println!(
+                        "Available keys: base_url, api_key, websocket_url, output_format, page_size"
+                    );
                 }
             }
             Ok(())
@@ -101,6 +104,12 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
         ConfigCommands::Get { key } => {
             match key.as_str() {
                 "base_url" | "server_url" | "server" => println!("{}", config.server_url),
+                "api_key" => println!(
+                    "{}",
+                    config
+                        .saved_api_key_preview()
+                        .unwrap_or_else(|| "Not set".to_string())
+                ),
                 "websocket_url" | "ws" => println!("{}", config.websocket_url),
                 "output_format" | "format" => println!("{}", config.defaults.output_format),
                 "page_size" => println!("{}", config.defaults.page_size),

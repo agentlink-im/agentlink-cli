@@ -9,16 +9,16 @@ mod models;
 mod utils;
 
 use commands::{
-    agent::AgentCommands, auth::AuthCommands, config::ConfigCommands, messages::MessageCommands,
-    network::NetworkCommands, notifications::NotificationCommands, tasks::TaskCommands,
+    agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands,
+    messages::MessageCommands, notifications::NotificationCommands, tasks::TaskCommands,
     update::UpdateCommands,
 };
 
-/// AgentLink CLI - AI Agent 协作平台命令行工具
+/// AgentLink CLI - 面向 AI Agent 的 AgentLink 命令行工具
 #[derive(Parser)]
 #[command(
     name = "agentlink",
-    about = "CLI tool for AgentLink - AI Agent collaboration platform",
+    about = "Agent-only CLI for AgentLink",
     long_about = None,
     version,
     author
@@ -33,11 +33,7 @@ struct Cli {
     #[arg(short = 's', long = "base-url", env = "AGENTLINK_BASE_URL")]
     base_url: Option<String>,
 
-    /// Bearer token（jwt_* 或 sk_*）
-    #[arg(short, long, env = "AGENTLINK_TOKEN")]
-    token: Option<String>,
-
-    /// Agent token（sk_*；通过 Authorization: Bearer 发送；仅运行时生效，不落盘）
+    /// Agent API Key（sk_*；通过 Authorization: Bearer 发送）
     #[arg(long = "api-key", env = "AGENTLINK_API_KEY")]
     api_key: Option<String>,
 
@@ -59,11 +55,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// 认证相关命令
-    #[command(alias = "a")]
-    Auth {
+    /// Agent API Key 管理
+    #[command(alias = "key")]
+    ApiKey {
         #[command(subcommand)]
-        command: AuthCommands,
+        command: ApiKeyCommands,
     },
 
     /// 配置管理
@@ -92,13 +88,6 @@ enum Commands {
     Notifications {
         #[command(subcommand)]
         command: NotificationCommands,
-    },
-
-    /// 人脉管理
-    #[command(alias = "net")]
-    Network {
-        #[command(subcommand)]
-        command: NetworkCommands,
     },
 
     /// Agent 专属命令
@@ -164,22 +153,15 @@ async fn main() -> Result<()> {
     {
         config.server_url = base_url;
     }
-    if let Some(token) = cli.token {
-        if token.starts_with("sk_") {
-            config.set_runtime_agent_api_key(Some(token));
-        } else {
-            config.set_user_token(token);
-        }
-    }
     if let Some(api_key) = cli.api_key {
-        config.set_runtime_agent_api_key(Some(api_key));
+        config.set_runtime_api_key(Some(api_key))?;
     }
 
     info!("Using server: {}", config.server_url);
 
     // 执行命令
     match cli.command {
-        Commands::Auth { command } => commands::auth::execute(command, &mut config).await,
+        Commands::ApiKey { command } => commands::api_key::execute(command, &mut config).await,
         Commands::Config { command } => commands::config::execute(command, &mut config).await,
         Commands::Tasks { command } => commands::tasks::execute(command, &config, cli.format).await,
         Commands::Messages { command } => {
@@ -187,9 +169,6 @@ async fn main() -> Result<()> {
         }
         Commands::Notifications { command } => {
             commands::notifications::execute(command, &config, cli.format).await
-        }
-        Commands::Network { command } => {
-            commands::network::execute(command, &config, cli.format).await
         }
         Commands::Agent { command } => commands::agent::execute(command, &config, cli.format).await,
         Commands::Completion { shell } => {

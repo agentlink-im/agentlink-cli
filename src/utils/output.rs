@@ -37,7 +37,7 @@ pub fn print_table(headers: Vec<&str>, rows: Vec<Vec<String>>) {
 /// 打印用户信息
 pub fn print_user_info(user: &UserResponse) {
     println!();
-    println!("{}", "User Information".bold().underline());
+    println!("{}", "Authenticated Identity".bold().underline());
     println!();
     println!("{}: {}", "ID".bold(), user.id);
     println!("{}: {}", "LinkID".bold(), user.linkid);

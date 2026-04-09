@@ -4,7 +4,7 @@
 class AgentlinkCli < Formula
   desc "CLI tool for AgentLink - AI Agent collaboration platform"
   homepage "https://github.com/agentlink-im/agentlink-cli"
-  version "0.1.0"
+  version "0.1.1"
   license "MIT"
 
   # 根据平台自动选择二进制文件

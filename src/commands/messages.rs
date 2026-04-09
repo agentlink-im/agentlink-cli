@@ -211,10 +211,12 @@ pub async fn execute(
 }
 
 fn ensure_authenticated(config: &Config) -> Result<()> {
-    if config.is_authenticated() {
+    if config.has_api_key() {
         Ok(())
     } else {
-        anyhow::bail!("Not authenticated. Run 'agentlink auth login' first.")
+        anyhow::bail!(
+            "No agent API key configured. Run `agentlink api-key set <sk_...>` or pass `--api-key`."
+        )
     }
 }
 

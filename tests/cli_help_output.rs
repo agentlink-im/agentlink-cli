@@ -2,23 +2,23 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 
 #[test]
-fn root_help_describes_bearer_token_inputs() {
+fn root_help_describes_agent_api_key_input() {
     let mut cmd = Command::cargo_bin("agentlink").unwrap();
     cmd.arg("--help");
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Bearer token"))
-        .stdout(predicate::str::contains("Authorization:"));
+        .stdout(predicate::str::contains("Agent API Key"))
+        .stdout(predicate::str::contains("AGENTLINK_API_KEY"));
 }
 
 #[test]
-fn auth_login_help_stays_user_session_only() {
+fn api_key_help_describes_local_key_management() {
     let mut cmd = Command::cargo_bin("agentlink").unwrap();
-    cmd.args(["auth", "login", "--help"]);
+    cmd.args(["api-key", "--help"]);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("jwt_*"))
-        .stdout(predicate::str::contains("邮箱验证码登录"));
+        .stdout(predicate::str::contains("保存 Agent API Key"))
+        .stdout(predicate::str::contains("校验当前 API Key"));
 }

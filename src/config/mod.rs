@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -13,18 +13,18 @@ pub struct Config {
     #[serde(default = "default_websocket_url")]
     pub websocket_url: String,
 
-    /// 持久化的人类用户 token（jwt_*）
-    /// 兼容历史字段名 `api_key`
-    #[serde(default, alias = "api_key")]
-    pub user_token: Option<String>,
+    /// 持久化的 Agent API Key（sk_*）
+    /// 兼容历史字段名 `user_token`
+    #[serde(default, alias = "user_token")]
+    pub api_key: Option<String>,
 
     /// 默认输出格式
     #[serde(default)]
     pub defaults: Defaults,
 
-    /// 运行时 Agent API Key（不落盘）
+    /// 运行时覆盖的 Agent API Key（不落盘）
     #[serde(skip)]
-    pub runtime_agent_api_key: Option<String>,
+    pub runtime_api_key: Option<String>,
 
     /// 当前配置文件路径（不落盘）
     #[serde(skip)]
@@ -63,9 +63,9 @@ impl Default for Config {
         Self {
             server_url: default_server_url(),
             websocket_url: default_websocket_url(),
-            user_token: None,
+            api_key: None,
             defaults: Defaults::default(),
-            runtime_agent_api_key: None,
+            runtime_api_key: None,
             config_path: None,
         }
     }
@@ -128,39 +128,94 @@ impl Config {
         }
     }
 
-    /// 将持久化配置重置为默认值，但保留当前配置文件路径和运行时 Agent API Key
+    /// 将持久化配置重置为默认值，但保留当前配置文件路径
     pub fn reset_to_defaults(&mut self) {
         let config_path = self.config_path.clone();
-        let runtime_agent_api_key = self.runtime_agent_api_key.clone();
+        let runtime_api_key = self.runtime_api_key.clone();
         *self = Self::default();
         self.config_path = config_path;
-        self.runtime_agent_api_key = runtime_agent_api_key;
+        self.runtime_api_key = runtime_api_key;
     }
 
-    /// 检查是否有任意可用认证（用户 token 或运行时 agent key）
-    pub fn is_authenticated(&self) -> bool {
-        self.user_token.is_some() || self.runtime_agent_api_key.is_some()
+    /// 检查是否存在可用的 Agent API Key
+    pub fn has_api_key(&self) -> bool {
+        self.require_api_key().is_ok()
     }
 
-    /// 检查是否有用户登录态
-    pub fn has_user_token(&self) -> bool {
-        self.user_token.is_some()
+    /// 返回生效的 Agent API Key；若配置格式非法则返回错误
+    pub fn require_api_key(&self) -> Result<&str> {
+        let api_key = self
+            .runtime_api_key
+            .as_deref()
+            .or(self.api_key.as_deref())
+            .ok_or_else(|| missing_api_key_error())?;
+        validate_api_key_value(api_key)?;
+        Ok(api_key)
     }
 
-    /// 设置运行时 Agent API Key（不会写入配置文件）
-    pub fn set_runtime_agent_api_key(&mut self, api_key: Option<String>) {
-        self.runtime_agent_api_key = api_key;
+    /// 设置 Agent API Key
+    pub fn set_api_key(&mut self, api_key: String) -> Result<()> {
+        let api_key = api_key.trim().to_string();
+        validate_api_key_value(&api_key)?;
+        self.api_key = Some(api_key);
+        Ok(())
     }
 
-    /// 设置人类用户 token
-    pub fn set_user_token(&mut self, token: String) {
-        self.user_token = Some(token);
+    /// 清除 Agent API Key
+    pub fn clear_api_key(&mut self) {
+        self.api_key = None;
     }
 
-    /// 清除人类用户 token
-    pub fn clear_user_token(&mut self) {
-        self.user_token = None;
+    /// 设置运行时 Agent API Key（不写入配置文件）
+    pub fn set_runtime_api_key(&mut self, api_key: Option<String>) -> Result<()> {
+        let api_key = api_key
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+
+        if let Some(value) = api_key.as_deref() {
+            validate_api_key_value(value)?;
+        }
+
+        self.runtime_api_key = api_key;
+        Ok(())
     }
+
+    /// 返回持久化配置中的 API Key 预览
+    pub fn saved_api_key_preview(&self) -> Option<String> {
+        self.api_key.as_deref().map(mask_api_key)
+    }
+
+    /// 返回运行时覆盖的 API Key 预览
+    pub fn runtime_api_key_preview(&self) -> Option<String> {
+        self.runtime_api_key.as_deref().map(mask_api_key)
+    }
+}
+
+pub fn validate_api_key_value(api_key: &str) -> Result<()> {
+    let api_key = api_key.trim();
+
+    if api_key.is_empty() {
+        return Err(missing_api_key_error());
+    }
+
+    if !api_key.starts_with("sk_") {
+        return Err(anyhow!(
+            "AgentLink CLI only supports agent API keys (`sk_*`). Run `agentlink api-key set <sk_...>` or pass `--api-key`."
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn mask_api_key(api_key: &str) -> String {
+    let visible_len = api_key.len().min(8);
+    format!("{}****", &api_key[..visible_len])
+}
+
+fn missing_api_key_error() -> anyhow::Error {
+    anyhow!(
+        "No agent API key configured. Run `agentlink api-key set <sk_...>` or pass `--api-key`."
+    )
 }
 
 #[cfg(test)]
@@ -173,8 +228,8 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.server_url, "https://beta-api.agentlink.chat/");
         assert_eq!(config.websocket_url, "wss://beta-api.agentlink.chat/");
-        assert!(config.user_token.is_none());
-        assert!(config.runtime_agent_api_key.is_none());
+        assert!(config.api_key.is_none());
+        assert!(config.runtime_api_key.is_none());
     }
 
     #[test]
@@ -184,20 +239,18 @@ mod tests {
 
         let mut config = Config::default();
         config.server_url = "https://test.example.com".to_string();
-        config.user_token = Some("jwt_test_token".to_string());
-        config.runtime_agent_api_key = Some("sk_runtime_only".to_string());
+        config.api_key = Some("sk_test_token".to_string());
 
         let content = toml::to_string_pretty(&config).unwrap();
         std::fs::write(&config_path, content).unwrap();
 
         let loaded = Config::load(Some(config_path.to_str().unwrap())).unwrap();
         assert_eq!(loaded.server_url, "https://test.example.com");
-        assert_eq!(loaded.user_token, Some("jwt_test_token".to_string()));
-        assert!(loaded.runtime_agent_api_key.is_none());
+        assert_eq!(loaded.api_key, Some("sk_test_token".to_string()));
     }
 
     #[test]
-    fn test_config_load_legacy_api_key_field() {
+    fn test_config_load_legacy_user_token_field() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.toml");
 
@@ -205,13 +258,24 @@ mod tests {
             &config_path,
             r#"
 server_url = "https://legacy.example.com"
-api_key = "jwt_legacy_token"
+user_token = "sk_legacy_token"
 "#,
         )
         .unwrap();
 
         let loaded = Config::load(Some(config_path.to_str().unwrap())).unwrap();
         assert_eq!(loaded.server_url, "https://legacy.example.com");
-        assert_eq!(loaded.user_token, Some("jwt_legacy_token".to_string()));
+        assert_eq!(loaded.api_key, Some("sk_legacy_token".to_string()));
+    }
+
+    #[test]
+    fn test_require_api_key_rejects_non_agent_tokens() {
+        let mut config = Config::default();
+        config.api_key = Some("jwt_legacy_token".to_string());
+
+        let error = config.require_api_key().unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("only supports agent API keys (`sk_*`)"));
     }
 }
