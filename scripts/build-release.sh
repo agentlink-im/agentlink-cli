@@ -1,6 +1,6 @@
 #!/bin/bash
 # AgentLink CLI 本地构建发布脚本
-# 使用方法: ./scripts/build-release.sh [version] [--draft] [--skip-publish] [--yes]
+# 使用方法: ./scripts/build-release.sh [version] [--draft] [--skip-publish]
 # 示例: ./scripts/build-release.sh v0.1.0 --draft
 
 set -euo pipefail
@@ -26,7 +26,6 @@ CREATE_DRAFT_RELEASE=false
 SKIP_BUILD=false
 SKIP_PUBLISH=false
 LOCAL_ONLY=false
-AUTO_CONFIRM=false
 TOKEN_SOURCE="gh auth login"
 
 parse_args() {
@@ -45,7 +44,7 @@ parse_args() {
                 LOCAL_ONLY=true
                 ;;
             --yes|--non-interactive)
-                AUTO_CONFIRM=true
+                print_warning "$1 已是默认行为：脚本会自动创建或更新 GitHub Release"
                 ;;
             --repo)
                 shift
@@ -159,13 +158,7 @@ should_publish_release() {
         return 1
     fi
 
-    if [[ "${AUTO_CONFIRM}" == "true" ]] || [[ -n "${CI:-}" ]] || [[ "${AGENTLINK_RELEASE_YES:-}" == "1" ]]; then
-        return 0
-    fi
-
-    read -p "是否创建/更新 GitHub Release? (Y/n) " -n 1 -r
-    echo
-    [[ ! "${REPLY}" =~ ^[Nn]$ ]]
+    return 0
 }
 
 parse_args "$@"
@@ -353,18 +346,9 @@ create_release() {
 
     if release_exists; then
         print_warning "Release $VERSION 已存在"
-        if [[ "${AUTO_CONFIRM}" != "true" ]] && [[ -z "${CI:-}" ]] && [[ "${AGENTLINK_RELEASE_YES:-}" != "1" ]]; then
-            read -p "是否更新现有 Release? (y/N) " -n 1 -r
-            echo
-            if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
-                print_info "请手动上传文件:"
-                ls -la "$RELEASE_DIR"
-                return
-            fi
-        fi
-        
-        # 上传文件到现有 release
-        print_info "上传文件到现有 Release..."
+
+        # 自动上传文件到现有 release
+        print_info "自动更新现有 Release..."
         for file in "$RELEASE_DIR"/*; do
             if [ -f "$file" ]; then
                 gh release upload "$VERSION" "$file" --repo "$GITHUB_REPOSITORY" --clobber

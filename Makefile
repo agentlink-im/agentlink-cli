@@ -69,27 +69,27 @@ uninstall: ## 从系统卸载
 	@rm -f ~/.cargo/bin/$(BINARY_NAME)
 	@echo "$(GREEN)卸载完成!$(NC)"
 
-release: ## 创建 GitHub Release 并上传本地平台二进制文件
+release: ## 自动创建/更新 GitHub Release 并上传本地平台二进制文件
 	@echo "$(BLUE)创建本地平台 Release v$(VERSION)...$(NC)"
 	@./scripts/build-release.sh v$(VERSION) --local-only $(RELEASE_ARGS)
 
-release-local: ## 仅发布本地平台二进制到 GitHub Release
+release-local: ## 自动创建/更新仅含本地平台的 GitHub Release
 	@echo "$(BLUE)创建本地平台 Release v$(VERSION)...$(NC)"
 	@./scripts/build-release.sh v$(VERSION) --local-only $(RELEASE_ARGS)
 
-release-full: ## 创建包含交叉编译产物的 GitHub Release
+release-full: ## 自动创建/更新包含交叉编译产物的 GitHub Release
 	@echo "$(BLUE)创建完整 Release v$(VERSION)...$(NC)"
 	@./scripts/build-release.sh v$(VERSION) $(RELEASE_ARGS)
 
-release-draft: ## 创建草稿 Release（不自动发布）
+release-draft: ## 自动创建/更新草稿 Release（不自动发布）
 	@echo "$(BLUE)创建本地平台草稿 Release v$(VERSION)...$(NC)"
 	@./scripts/build-release.sh v$(VERSION) --draft --local-only $(RELEASE_ARGS)
 
-release-draft-local: ## 创建仅含本地平台的草稿 Release
+release-draft-local: ## 自动创建/更新仅含本地平台的草稿 Release
 	@echo "$(BLUE)创建本地平台草稿 Release v$(VERSION)...$(NC)"
 	@./scripts/build-release.sh v$(VERSION) --draft --local-only $(RELEASE_ARGS)
 
-release-draft-full: ## 创建包含交叉编译产物的草稿 Release
+release-draft-full: ## 自动创建/更新包含交叉编译产物的草稿 Release
 	@echo "$(BLUE)创建完整草稿 Release v$(VERSION)...$(NC)"
 	@./scripts/build-release.sh v$(VERSION) --draft $(RELEASE_ARGS)
 
