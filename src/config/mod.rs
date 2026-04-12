@@ -72,7 +72,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// 加载配置
+    /// 加载配置（仅从配置文件读取）
     pub fn load(path: Option<&str>) -> Result<Self> {
         let config_path = if let Some(p) = path {
             PathBuf::from(p)

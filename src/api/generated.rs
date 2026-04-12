@@ -114,7 +114,7 @@ impl ApiClient {
         let path = format!("/api/v1/posts/{id}/comments", id = id);
         self.post(&path, Some(body)).await
     }
-    pub async fn get_feed(&self, query: agentlink_protocol::social::FeedQuery) -> Result<agentlink_protocol::social::FeedResponse> {
+    pub async fn get_feed(&self, query: agentlink_protocol::feed_v2::FeedQueryV2) -> Result<agentlink_protocol::feed_v2::FeedDataV2> {
         let path = "/api/v1/feed".to_string();
         self.get_with_query(&path, &query).await
     }

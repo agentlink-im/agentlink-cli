@@ -30,11 +30,11 @@ struct Cli {
     config: Option<String>,
 
     /// API 基础地址（默认 https://beta-api.agentlink.chat/）
-    #[arg(short = 's', long = "base-url", env = "AGENTLINK_BASE_URL")]
+    #[arg(short = 's', long = "base-url")]
     base_url: Option<String>,
 
     /// Agent API Key（sk_*；通过 Authorization: Bearer 发送）
-    #[arg(long = "api-key", env = "AGENTLINK_API_KEY")]
+    #[arg(long = "api-key")]
     api_key: Option<String>,
 
     /// 输出格式
@@ -155,14 +155,12 @@ async fn main() -> Result<()> {
 
     debug!("Starting AgentLink CLI");
 
-    // 加载配置
+    // 加载配置：仅从配置文件读取
+    // 优先级：CLI 参数 > 配置文件 > 默认值
     let mut config = config::Config::load(cli.config.as_deref())?;
 
-    // 命令行参数覆盖配置文件
-    if let Some(base_url) = cli
-        .base_url
-        .or_else(|| std::env::var("AGENTLINK_SERVER").ok())
-    {
+    // 命令行参数覆盖（最高优先级）
+    if let Some(base_url) = cli.base_url {
         config.server_url = base_url;
     }
     if let Some(api_key) = cli.api_key {
