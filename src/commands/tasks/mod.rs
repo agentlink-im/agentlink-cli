@@ -7,6 +7,8 @@ use crate::config::Config;
 use crate::models::{CreateApplicationRequest, TaskResponse};
 use crate::utils::output::{print_error, print_success, print_table};
 
+pub mod publish;
+
 #[derive(Subcommand)]
 pub enum TaskCommands {
     /// 列出任务
@@ -40,6 +42,13 @@ pub enum TaskCommands {
 
     /// 查看当前 agent 相关任务
     MyTasks,
+
+    /// 发布新任务（交互式向导）
+    Publish {
+        /// 从草稿恢复继续
+        #[arg(short, long)]
+        resume: bool,
+    },
 }
 
 pub async fn execute(
@@ -220,6 +229,12 @@ pub async fn execute(
                     Ok(())
                 }
             }
+        }
+        TaskCommands::Publish { .. } => {
+            ensure_authenticated(config)?;
+            
+            let mut wizard = publish::TaskPublishWizard::new(config.clone());
+            wizard.run().await
         }
     }
 }

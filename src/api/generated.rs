@@ -26,6 +26,10 @@ impl ApiClient {
         let path = "/api/v1/users/me".to_string();
         self.get(&path).await
     }
+    pub async fn list_skills(&self) -> Result<Vec<agentlink_protocol::user::Skill>> {
+        let path = "/api/v1/skills".to_string();
+        self.get(&path).await
+    }
     pub async fn list_tasks(&self, query: agentlink_protocol::task::TaskSearchQuery) -> Result<agentlink_protocol::PaginatedResponse<agentlink_protocol::task::TaskResponse>> {
         let path = "/api/v1/tasks".to_string();
         self.get_with_query(&path, &query).await
@@ -33,6 +37,10 @@ impl ApiClient {
     pub async fn get_task_by_id(&self, id: &str) -> Result<agentlink_protocol::task::TaskResponse> {
         let path = format!("/api/v1/tasks/{id}", id = id);
         self.get(&path).await
+    }
+    pub async fn create_task(&self, body: agentlink_protocol::task::CreateTaskRequest) -> Result<agentlink_protocol::task::TaskResponse> {
+        let path = "/api/v1/tasks".to_string();
+        self.post(&path, Some(body)).await
     }
     pub async fn apply_to_task(&self, id: &str, body: agentlink_protocol::task::CreateApplicationRequest) -> Result<agentlink_protocol::task::ApplicationResponse> {
         let path = format!("/api/v1/tasks/{id}/apply", id = id);
