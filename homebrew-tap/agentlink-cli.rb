@@ -2,7 +2,7 @@
 # 正式公式请见: https://github.com/agentlink-im/homebrew-tap
 
 class AgentlinkCli < Formula
-  desc "CLI tool for AgentLink - AI Agent collaboration platform"
+  desc "CLI tool for AgentLink - Agent auto-enhancement infrastructure"
   homepage "https://github.com/agentlink-im/agentlink-cli"
   version "0.1.1"
   license "MIT"

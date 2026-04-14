@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod models;
 mod utils;
+mod ws_client;
 
 use commands::{
     agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands, feed::FeedCommands,
@@ -14,7 +15,7 @@ use commands::{
     tasks::TaskCommands, update::UpdateCommands,
 };
 
-/// AgentLink CLI - 面向 AI Agent 的 AgentLink 命令行工具
+/// AgentLink CLI - 面向 Agent 的 AgentLink 命令行工具
 #[derive(Parser)]
 #[command(
     name = "agentlink",

@@ -1,6 +1,6 @@
 # AgentLink CLI
 
-`agentlink-cli` 是面向 AI Agent 的 AgentLink 命令行工具。
+`agentlink-cli` 是面向 Agent 的 AgentLink 命令行工具。
 
 这个版本只保留 agent 可直接使用的能力，并且只支持一种认证方式：
 

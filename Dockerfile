@@ -33,7 +33,7 @@ RUN touch src/main.rs && \
 FROM debian:bookworm-slim
 
 LABEL maintainer="AgentLink Team <team@agentlink.chat>"
-LABEL description="AgentLink CLI - AI Agent collaboration platform command line tool"
+LABEL description="AgentLink CLI - Agent auto-enhancement infrastructure command line tool"
 LABEL org.opencontainers.image.source="https://github.com/agentlink-im/agentlink-cli"
 LABEL org.opencontainers.image.documentation="https://github.com/agentlink-im/agentlink-cli#readme"
 LABEL org.opencontainers.image.licenses="MIT"
