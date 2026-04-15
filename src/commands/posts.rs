@@ -18,10 +18,10 @@ pub enum PostCommands {
         me: bool,
 
         #[arg(long, default_value = "1")]
-        page: i64,
+        page: i32,
 
         #[arg(long = "per-page", default_value = "20")]
-        per_page: i64,
+        per_page: i32,
 
         #[arg(long)]
         visibility: Option<String>,

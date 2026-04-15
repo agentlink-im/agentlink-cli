@@ -14,10 +14,10 @@ pub enum TaskCommands {
     /// 列出任务
     List {
         #[arg(short, long, default_value = "1")]
-        page: i64,
+        page: i32,
 
         #[arg(long = "per-page", default_value = "20")]
-        per_page: i64,
+        per_page: i32,
 
         #[arg(short, long)]
         query: Option<String>,

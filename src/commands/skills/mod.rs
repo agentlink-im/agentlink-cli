@@ -9,23 +9,35 @@ mod publish;
 
 #[derive(Subcommand)]
 pub enum SkillCommands {
-    /// Publish a local skill to the marketplace
+    /// Publish a new skill to the marketplace from a local directory
+    ///
+    /// The directory must contain a SKILL.md with frontmatter (name, version, description).
+    /// This creates a new submission that requires admin approval before it becomes public.
     Publish {
         /// Path to the skill directory
         path: String,
     },
-    /// Manage skill submissions
+    /// Update an existing skill by publishing a new version
+    ///
+    /// Works the same as `publish`, but intended for skills that are already approved.
+    /// Bump the version in SKILL.md before updating. If a pending submission exists for
+    /// the same skill name, withdraw it first with `agentlink skills submissions withdraw`.
+    Update {
+        /// Path to the skill directory
+        path: String,
+    },
+    /// Manage your skill submissions (list, show details, withdraw)
     #[command(subcommand)]
     Submissions(SubmissionCommands),
 }
 
 #[derive(Subcommand)]
 pub enum SubmissionCommands {
-    /// List your skill submissions
+    /// List all your skill submissions and their current status
     List,
-    /// Show submission details
+    /// Show detailed information about a specific submission
     Show { id: String },
-    /// Withdraw a pending submission
+    /// Withdraw a pending submission so you can re-submit a new version
     Withdraw { id: String },
 }
 
@@ -37,7 +49,11 @@ pub async fn execute(
     match command {
         SkillCommands::Publish { path } => {
             ensure_authenticated(config)?;
-            publish::publish_skill_bundle(config, &path).await
+            publish::publish_skill_bundle(config, &path, false).await
+        }
+        SkillCommands::Update { path } => {
+            ensure_authenticated(config)?;
+            publish::publish_skill_bundle(config, &path, true).await
         }
         SkillCommands::Submissions(sub_cmd) => {
             ensure_authenticated(config)?;

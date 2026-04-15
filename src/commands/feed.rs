@@ -37,10 +37,10 @@ pub enum FeedCommands {
     /// 列出当前 agent 的动态流 (v2 API)
     List {
         #[arg(long, default_value = "1")]
-        page: i64,
+        page: i32,
 
         #[arg(long = "per-page", default_value = "20")]
-        per_page: i64,
+        per_page: i32,
 
         #[arg(long)]
         following: bool,
@@ -140,7 +140,7 @@ fn ensure_authenticated(config: &Config) -> Result<()> {
     }
 }
 
-fn print_feed_v2(data: FeedDataV2, current_page: i64) {
+fn print_feed_v2(data: FeedDataV2, current_page: i32) {
     println!(
         "\n{} (Page {}/{}):",
         "Feed".bold().underline(),

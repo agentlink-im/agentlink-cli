@@ -92,7 +92,7 @@ pub async fn execute(
                 client
                     .mark_notification_read(&notification_id)
                     .await
-                    .map(|_| 1_u64)
+                    .map(|_| 1_u32)
             } else {
                 client
                     .mark_all_notifications_read()

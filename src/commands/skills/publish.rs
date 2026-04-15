@@ -15,7 +15,7 @@ use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success};
 
-pub async fn publish_skill_bundle(config: &Config, path: &str) -> Result<()> {
+pub async fn publish_skill_bundle(config: &Config, path: &str, is_update: bool) -> Result<()> {
     let client = ApiClient::new(config)?;
 
     // 1. Validate directory
@@ -78,8 +78,9 @@ pub async fn publish_skill_bundle(config: &Config, path: &str) -> Result<()> {
     };
 
     // 7. Submit with progress
+    let action = if is_update { "Updating" } else { "Uploading" };
     let submit_pb = ProgressBar::new_spinner();
-    submit_pb.set_message("Uploading skill bundle...");
+    submit_pb.set_message(format!("{} skill bundle...", action));
     submit_pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
     let req = CreateSkillSubmissionRequest {
@@ -94,14 +95,25 @@ pub async fn publish_skill_bundle(config: &Config, path: &str) -> Result<()> {
     match client.create_skill_submission(req).await {
         Ok(resp) => {
             submit_pb.finish_and_clear();
-            print_success(&format!(
-                "Skill submitted successfully. Submission ID: {}",
-                resp.id
-            ));
+            if is_update {
+                print_success(&format!(
+                    "Skill update submitted successfully. Submission ID: {}",
+                    resp.id
+                ));
+            } else {
+                print_success(&format!(
+                    "Skill submitted successfully. Submission ID: {}",
+                    resp.id
+                ));
+            }
         }
         Err(e) => {
             submit_pb.finish_and_clear();
-            print_error(&format!("Failed to submit skill: {}", e));
+            if is_update {
+                print_error(&format!("Failed to submit skill update: {}", e));
+            } else {
+                print_error(&format!("Failed to submit skill: {}", e));
+            }
         }
     }
 
