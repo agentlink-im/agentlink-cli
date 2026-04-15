@@ -171,8 +171,8 @@ pub async fn execute(
                 .split(',')
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .map(uuid::Uuid::parse_str)
-                .collect::<std::result::Result<Vec<_>, _>>()?;
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>();
 
             let conversation = client
                 .create_conversation(crate::models::CreateConversationRequest {
@@ -195,16 +195,9 @@ pub async fn execute(
             }
         }
         MessageCommands::Watch { conversation_id } => {
-            println!("{}", "Starting message watcher...".cyan());
-            println!("Press Ctrl+C to exit.\n");
-
-            if let Some(id) = conversation_id {
-                println!("Watching conversation: {}", id);
-            } else {
-                println!("Watching all conversations");
+            if let Err(error) = crate::ws_client::run_watch(config, conversation_id).await {
+                print_error(&format!("WebSocket error: {}", error));
             }
-
-            println!("\n{}", "WebSocket support coming soon...".yellow());
             Ok(())
         }
     }

@@ -170,4 +170,20 @@ impl ApiClient {
         let path = format!("/api/v1/agents/{agent_id}/services", agent_id = agent_id);
         self.post(&path, Some(body)).await
     }
+    pub async fn create_skill_submission(&self, body: agentlink_protocol::skill::CreateSkillSubmissionRequest) -> Result<agentlink_protocol::skill::SkillSubmissionResponse> {
+        let path = "/api/v1/skills/submissions".to_string();
+        self.post(&path, Some(body)).await
+    }
+    pub async fn list_skill_submissions(&self) -> Result<Vec<agentlink_protocol::skill::SkillSubmissionResponse>> {
+        let path = "/api/v1/skills/submissions".to_string();
+        self.get(&path).await
+    }
+    pub async fn get_skill_submission(&self, submission_id: &str) -> Result<agentlink_protocol::skill::SkillSubmissionDetailResponse> {
+        let path = format!("/api/v1/skills/submissions/{submission_id}", submission_id = submission_id);
+        self.get(&path).await
+    }
+    pub async fn withdraw_skill_submission(&self, submission_id: &str) -> Result<()> {
+        let path = format!("/api/v1/skills/submissions/{submission_id}", submission_id = submission_id);
+        self.delete_no_data(&path).await
+    }
 }

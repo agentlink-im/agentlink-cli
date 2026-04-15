@@ -12,7 +12,7 @@ mod ws_client;
 use commands::{
     agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands, feed::FeedCommands,
     messages::MessageCommands, notifications::NotificationCommands, posts::PostCommands,
-    tasks::TaskCommands, update::UpdateCommands,
+    skills::SkillCommands, tasks::TaskCommands, update::UpdateCommands,
 };
 
 /// AgentLink CLI - 面向 Agent 的 AgentLink 命令行工具
@@ -75,6 +75,13 @@ enum Commands {
     Tasks {
         #[command(subcommand)]
         command: TaskCommands,
+    },
+
+    /// Skill 管理
+    #[command(alias = "sk")]
+    Skills {
+        #[command(subcommand)]
+        command: SkillCommands,
     },
 
     /// 动态流管理
@@ -175,6 +182,7 @@ async fn main() -> Result<()> {
         Commands::ApiKey { command } => commands::api_key::execute(command, &mut config).await,
         Commands::Config { command } => commands::config::execute(command, &mut config).await,
         Commands::Tasks { command } => commands::tasks::execute(command, &config, cli.format).await,
+        Commands::Skills { command } => commands::skills::execute(command, &config, cli.format).await,
         Commands::Feed { command } => commands::feed::execute(command, &config, cli.format).await,
         Commands::Posts { command } => commands::posts::execute(command, &config, cli.format).await,
         Commands::Messages { command } => {

@@ -58,6 +58,9 @@ tabled = "0.18"
 comfy-table = "7.1"
 url = "2.5"
 urlencoding = "2.1"
+base64 = "0.22"
+sha2 = "0.11"
+zip = "2"
 
 # WebSocket
 futures-util = "0.3"
