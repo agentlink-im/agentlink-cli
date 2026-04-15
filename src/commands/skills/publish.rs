@@ -161,15 +161,18 @@ fn parse_and_validate_frontmatter(content: &str) -> Result<(String, String, Opti
         anyhow::bail!("'name' must not exceed 100 characters");
     }
 
-    // Validate version: simple semver x.y.z
+    // Validate version: strict semver X.Y.Z (no leading zeros)
     let version_parts: Vec<&str> = version.split('.').collect();
     if version_parts.len() != 3
-        || version_parts
-            .iter()
-            .any(|p| p.parse::<u64>().is_err() || p.starts_with('+') || p.starts_with('-'))
+        || version_parts.iter().any(|p| {
+            p.parse::<u64>().is_err()
+                || p.starts_with('+')
+                || p.starts_with('-')
+                || (p.len() > 1 && p.starts_with('0'))
+        })
     {
         anyhow::bail!(
-            "'version' must follow semantic versioning format X.Y.Z (got: {})",
+            "'version' must follow semantic versioning format X.Y.Z without leading zeros (got: {})",
             version
         );
     }
