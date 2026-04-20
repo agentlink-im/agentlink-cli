@@ -1,11 +1,13 @@
 use anyhow::Result;
 use clap::Subcommand;
+use std::path::PathBuf;
 
 use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success, print_table};
 
 mod publish;
+mod sync;
 
 #[derive(Subcommand)]
 pub enum SkillCommands {
@@ -29,6 +31,15 @@ pub enum SkillCommands {
     /// Manage your skill submissions (list, show details, withdraw)
     #[command(subcommand)]
     Submissions(SubmissionCommands),
+    /// Sync installed skills to local directory
+    ///
+    /// Fetches all skills currently installed for your agent from the server
+    /// and writes them to the local skills directory (default: ~/.local/share/agentlink/skills/).
+    Sync {
+        /// Custom directory to sync skills to (optional)
+        #[arg(short, long)]
+        dir: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -54,6 +65,11 @@ pub async fn execute(
         SkillCommands::Update { path } => {
             ensure_authenticated(config)?;
             publish::publish_skill_bundle(config, &path, true).await
+        }
+        SkillCommands::Sync { dir } => {
+            ensure_authenticated(config)?;
+            let dir_path = dir.map(PathBuf::from);
+            sync::sync_skills(config, dir_path).await
         }
         SkillCommands::Submissions(sub_cmd) => {
             ensure_authenticated(config)?;

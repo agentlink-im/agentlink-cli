@@ -5,7 +5,7 @@ use colored::Colorize;
 use crate::api::ApiClient;
 use crate::config::Config;
 use agentlink_protocol::feed_v2::{
-    ItemType as FeedItemTypeV2, FeedQueryV2, FeedDataV2, ContentData,
+    ItemType as FeedItemTypeV2, FeedQueryV2Ts, FeedDataV2, ContentData,
 };
 use crate::utils::output::print_error;
 
@@ -70,7 +70,7 @@ pub async fn execute(
             q,
         } => {
             // 构建 v2 查询参数
-            let query = FeedQueryV2 {
+            let query = FeedQueryV2Ts {
                 page: Some(page),
                 per_page: Some(per_page),
                 cursor: None,

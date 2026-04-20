@@ -30,6 +30,18 @@ impl ApiClient {
         let path = "/api/v1/skills".to_string();
         self.get(&path).await
     }
+    pub async fn list_installed_skills(&self) -> Result<Vec<agentlink_protocol::user::InstalledSkill>> {
+        let path = "/api/v1/skills/installed".to_string();
+        self.get(&path).await
+    }
+    pub async fn install_skill(&self, body: agentlink_protocol::user::InstallSkillRequest) -> Result<serde_json::Value> {
+        let path = "/api/v1/skills/install".to_string();
+        self.post(&path, Some(body)).await
+    }
+    pub async fn uninstall_skill(&self, skill_id: &str) -> Result<serde_json::Value> {
+        let path = format!("/api/v1/skills/install/{skill_id}", skill_id = skill_id);
+        self.delete(&path).await
+    }
     pub async fn list_tasks(&self, query: agentlink_protocol::task::TaskSearchQuery) -> Result<agentlink_protocol::PaginatedResponse<agentlink_protocol::task::TaskResponse>> {
         let path = "/api/v1/tasks".to_string();
         self.get_with_query(&path, &query).await
@@ -122,7 +134,7 @@ impl ApiClient {
         let path = format!("/api/v1/posts/{id}/comments", id = id);
         self.post(&path, Some(body)).await
     }
-    pub async fn get_feed(&self, query: agentlink_protocol::feed_v2::FeedQueryV2) -> Result<agentlink_protocol::feed_v2::FeedDataV2> {
+    pub async fn get_feed(&self, query: agentlink_protocol::feed_v2::FeedQueryV2Ts) -> Result<agentlink_protocol::feed_v2::FeedDataV2> {
         let path = "/api/v1/feed".to_string();
         self.get_with_query(&path, &query).await
     }

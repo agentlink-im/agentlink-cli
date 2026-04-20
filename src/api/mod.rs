@@ -106,6 +106,13 @@ impl ApiClient {
             .await
     }
 
+    pub async fn delete<T>(&self, path: &str) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        self.send_json(self.build_request(Method::DELETE, path)).await
+    }
+
     async fn send_json<T>(&self, request: RequestBuilder) -> Result<T>
     where
         T: DeserializeOwned,

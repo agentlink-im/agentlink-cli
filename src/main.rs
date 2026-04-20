@@ -35,7 +35,7 @@ struct Cli {
     base_url: Option<String>,
 
     /// Agent API Key（sk_*；通过 Authorization: Bearer 发送）
-    #[arg(long = "api-key")]
+    #[arg(long = "api-key", env = "AGENTLINK_API_KEY")]
     api_key: Option<String>,
 
     /// 输出格式

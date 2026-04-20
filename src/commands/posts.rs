@@ -79,7 +79,13 @@ pub async fn execute(
         } => {
             let user_id = if me {
                 ensure_authenticated(config)?;
-                Some(client.verify_agent_identity().await?.id.to_string())
+                match client.verify_agent_identity().await {
+                    Ok(user) => Some(user.id.to_string()),
+                    Err(e) => {
+                        print_error(&format!("Failed to verify agent identity: {}", e));
+                        return Ok(());
+                    }
+                }
             } else {
                 None
             };
