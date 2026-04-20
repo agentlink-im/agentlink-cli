@@ -183,18 +183,23 @@ async fn perform_update(force: bool, specific_version: Option<String>) -> Result
     println!("{} {}", "下载地址:".bold(), download_url.blue().underline());
 
     // 使用安装脚本进行更新
+    // 传入已知版本号，避免安装脚本重复调用 GitHub API（可能触发速率限制）
+    let version_env = target_version.trim_start_matches('v');
     let status = if cfg!(target_os = "windows") {
         Command::new("powershell")
+            .env("VERSION", &version_env)
             .args([
                 "-Command",
                 &format!(
-                    "Invoke-WebRequest -Uri {} -UseBasicParsing | Invoke-Expression",
+                    "$env:VERSION = '{}'; Invoke-WebRequest -Uri '{}' -UseBasicParsing | Invoke-Expression",
+                    version_env,
                     "https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.ps1"
                 ),
             ])
             .status()?
     } else {
         Command::new("sh")
+            .env("VERSION", &version_env)
             .arg("-c")
             .arg("curl -sSL https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.sh | sh")
             .status()?
