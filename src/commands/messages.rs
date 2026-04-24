@@ -5,7 +5,8 @@ use colored::Colorize;
 use crate::api::ApiClient;
 use crate::config::Config;
 use crate::models::{
-    ConversationResponse, ConversationType, MessageType, ParticipantResponse, SendMessageRequest,
+    ConversationResponse, ConversationType, CreateConversationRequest, MessageType,
+    ParticipantResponse, SendMessageRequest,
 };
 use crate::utils::output::{print_error, print_success, print_table};
 
@@ -34,7 +35,8 @@ pub enum MessageCommands {
 
     /// 发送消息
     Send {
-        conversation_id: String,
+        /// 对方 linkid (如: alice, agent_001)
+        recipient: String,
         message: String,
     },
 
@@ -135,9 +137,18 @@ pub async fn execute(
             }
         },
         MessageCommands::Send {
-            conversation_id,
+            recipient,
             message,
         } => {
+            let conversation_id = resolve_conversation_id(&client, &recipient).await;
+            let conversation_id = match conversation_id {
+                Ok(id) => id,
+                Err(error) => {
+                    print_error(&format!("Failed to resolve recipient '{}': {}", recipient, error));
+                    return Ok(());
+                }
+            };
+
             let body = SendMessageRequest {
                 content: message,
                 kind: Some(MessageType::Text),
@@ -175,7 +186,7 @@ pub async fn execute(
                 .collect::<Vec<_>>();
 
             let conversation = client
-                .create_conversation(crate::models::CreateConversationRequest {
+                .create_conversation(CreateConversationRequest {
                     kind: kind.into(),
                     title,
                     participant_ids,
@@ -201,6 +212,45 @@ pub async fn execute(
             Ok(())
         }
     }
+}
+
+async fn resolve_conversation_id(
+    client: &ApiClient,
+    recipient: &str,
+) -> Result<String> {
+    let user = client.get_user(recipient).await?;
+    let target_user_id = user.id.to_string();
+
+    let conversations = client
+        .list_conversations(agentlink_protocol::message::ConversationQuery {
+            page: None,
+            per_page: None,
+        })
+        .await?;
+
+    // Find an existing direct conversation with this user
+    for conversation in &conversations {
+        if conversation.kind == ConversationType::Direct {
+            if conversation
+                .participants
+                .iter()
+                .any(|p| p.user_id == user.id)
+            {
+                return Ok(conversation.id.to_string());
+            }
+        }
+    }
+
+    // No existing conversation: create a new direct one
+    let new_conversation = client
+        .create_conversation(CreateConversationRequest {
+            kind: ConversationType::Direct,
+            title: None,
+            participant_ids: vec![target_user_id],
+        })
+        .await?;
+
+    Ok(new_conversation.id.to_string())
 }
 
 fn ensure_authenticated(config: &Config) -> Result<()> {

@@ -197,6 +197,11 @@ impl ApiClient {
         }
     }
 
+    pub async fn get_user(&self, id: &str) -> Result<agentlink_protocol::user::UserResponse> {
+        let path = format!("/api/v1/users/{}", id);
+        self.get(&path).await
+    }
+
     pub async fn verify_agent_identity(&self) -> Result<agentlink_protocol::user::UserResponse> {
         let user = self.get_current_user().await?;
 
