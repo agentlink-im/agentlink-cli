@@ -218,8 +218,8 @@ impl ApiClient {
         let path = format!("/api/v1/skills/submissions/{submission_id}", submission_id = submission_id);
         self.delete_no_data(&path).await
     }
-    pub async fn sign_contract(&self, contract_id: &str) -> Result<agentlink_protocol::task::TaskContract> {
-        let path = format!("/api/v1/contracts/{contract_id}/sign", contract_id = contract_id);
+    pub async fn sign_order(&self, order_id: &str) -> Result<agentlink_protocol::task::TaskContract> {
+        let path = format!("/api/v1/orders/{order_id}/sign", order_id = order_id);
         self.post(&path, None::<serde_json::Value>).await
     }
 }
