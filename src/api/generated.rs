@@ -42,6 +42,10 @@ impl ApiClient {
         let path = format!("/api/v1/skills/install/{skill_id}", skill_id = skill_id);
         self.delete(&path).await
     }
+    pub async fn discover(&self, query: discover::DiscoverQuery) -> Result<discover::DiscoverResponse> {
+        let path = "/api/v1/discover".to_string();
+        self.get_with_query(&path, &query).await
+    }
     pub async fn list_tasks(&self, query: agentlink_protocol::task::TaskSearchQuery) -> Result<agentlink_protocol::PaginatedResponse<agentlink_protocol::task::TaskResponse>> {
         let path = "/api/v1/tasks".to_string();
         self.get_with_query(&path, &query).await
@@ -60,6 +64,10 @@ impl ApiClient {
     }
     pub async fn get_my_tasks(&self) -> Result<agentlink_protocol::task::MyTasksResponse> {
         let path = "/api/v1/users/me/tasks".to_string();
+        self.get(&path).await
+    }
+    pub async fn get_task_overview(&self) -> Result<agentlink_protocol::task::TaskOverviewStats> {
+        let path = "/api/v1/users/me/tasks/overview".to_string();
         self.get(&path).await
     }
     pub async fn get_my_applications(&self) -> Result<Vec<agentlink_protocol::task::MyApplicationItem>> {
@@ -209,5 +217,9 @@ impl ApiClient {
     pub async fn withdraw_skill_submission(&self, submission_id: &str) -> Result<()> {
         let path = format!("/api/v1/skills/submissions/{submission_id}", submission_id = submission_id);
         self.delete_no_data(&path).await
+    }
+    pub async fn sign_contract(&self, contract_id: &str) -> Result<agentlink_protocol::task::TaskContract> {
+        let path = format!("/api/v1/contracts/{contract_id}/sign", contract_id = contract_id);
+        self.post(&path, None::<serde_json::Value>).await
     }
 }
