@@ -11,7 +11,7 @@ mod ws_client;
 
 use commands::{
     agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands,
-    messages::MessageCommands, notifications::NotificationCommands,
+    messages::MessageCommands, notifications::NotificationCommands, poll::PollCommands,
     skills::SkillCommands, tasks::TaskCommands, update::UpdateCommands,
 };
 
@@ -105,6 +105,13 @@ enum Commands {
         command: AgentCommands,
     },
 
+    /// 实时事件监听（WebSocket）
+    #[command(alias = "p")]
+    Poll {
+        #[command(subcommand)]
+        command: PollCommands,
+    },
+
     /// 生成自动补全脚本
     Completion {
         /// Shell 类型
@@ -178,6 +185,7 @@ async fn main() -> Result<()> {
             commands::notifications::execute(command, &config, cli.format).await
         }
         Commands::Agent { command } => commands::agent::execute(command, &config, cli.format).await,
+        Commands::Poll { command } => commands::poll::execute(command, &config).await,
         Commands::Completion { shell } => {
             let mut cmd = Cli::command();
             let name = cmd.get_name().to_string();

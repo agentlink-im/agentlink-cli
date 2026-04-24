@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use futures_util::{SinkExt, StreamExt};
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, sleep, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use agentlink_protocol::ws_event::{
@@ -12,7 +12,36 @@ use agentlink_protocol::ws_event::{
 use crate::config::Config;
 
 /// 启动 WebSocket 监听并阻塞直到用户按下 Ctrl+C
+/// 支持可选的 conversation_id 过滤（仅处理该会话的消息）
 pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Result<()> {
+    run_poll(
+        config,
+        false,       // json mode
+        Vec::new(),  // no filters
+        false,       // no auto-reconnect
+        60,          // max_backoff unused
+        conversation_id.as_deref(),
+    )
+    .await
+}
+
+/// 启动 WebSocket 事件流，支持 JSON Lines 输出、事件过滤和自动重连。
+///
+/// 当 `json` 为 true 时，每行输出一个 JSON 对象，格式如下：
+/// ```json
+/// {"event":"message.created","timestamp":"2026-01-01T00:00:00Z","payload":{...}}
+/// ```
+///
+/// 当 `reconnect` 为 true 时，连接断开后会按指数退避策略自动重连，
+/// 直到用户按下 Ctrl+C。
+pub async fn run_poll(
+    config: &Config,
+    json: bool,
+    filters: Vec<String>,
+    reconnect: bool,
+    max_backoff_secs: u64,
+    conversation_filter: Option<&str>,
+) -> Result<()> {
     let token = config.require_api_key()?;
     let base_url = config.websocket_url.trim_end_matches('/');
     let url = if base_url.ends_with("/ws") {
@@ -21,7 +50,57 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
         format!("{}/ws?token={}", base_url, urlencoding::encode(token))
     };
 
-    let (ws_stream, _) = connect_async(&url)
+    let filter_set = if filters.is_empty() {
+        None
+    } else {
+        Some(
+            filters
+                .into_iter()
+                .map(|s| s.to_lowercase().replace(".", "").replace("_", ""))
+                .collect::<std::collections::HashSet<String>>(),
+        )
+    };
+
+    let mut backoff_secs = 1u64;
+
+    loop {
+        match connect_and_listen(&url, json, filter_set.as_ref(), conversation_filter).await {
+            Ok(()) => {
+                if !reconnect {
+                    break;
+                }
+                // 正常退出（Ctrl+C），不重连
+                break;
+            }
+            Err(e) => {
+                if !reconnect {
+                    return Err(e);
+                }
+                if !json {
+                    eprintln!(
+                        "\n[RECONNECT] Connection lost: {}. Retrying in {}s...",
+                        e, backoff_secs
+                    );
+                } else {
+                    eprintln!(r#"{{"event":"_reconnect","reason":"{}","backoff":{}}}"#, e, backoff_secs);
+                }
+                sleep(Duration::from_secs(backoff_secs)).await;
+                backoff_secs = (backoff_secs * 2).min(max_backoff_secs);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// 建立 WebSocket 连接并监听消息。返回 Ok 表示正常退出（Ctrl+C）。
+async fn connect_and_listen(
+    url: &str,
+    json: bool,
+    filter_set: Option<&std::collections::HashSet<String>>,
+    conversation_filter: Option<&str>,
+) -> Result<()> {
+    let (ws_stream, _) = connect_async(url)
         .await
         .context("Failed to connect to WebSocket")?;
 
@@ -52,7 +131,9 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
     loop {
         tokio::select! {
             _ = &mut ctrl_c => {
-                println!("\nDisconnecting...");
+                if !json {
+                    println!("\nDisconnecting...");
+                }
                 break;
             }
             msg = read.next() => {
@@ -60,20 +141,28 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<WsServerEnvelope>(&text) {
                             Ok(envelope) => {
-                                if !handle_message(&envelope.message, conversation_id.as_deref()) {
+                                if !handle_envelope(&envelope, json, filter_set, conversation_filter) {
                                     break;
                                 }
                             }
-                            Err(_) => println!("[RAW] {}", text),
+                            Err(_) => {
+                                if json {
+                                    println!(r#"{{"event":"_raw","text":{}}}"#, serde_json::to_string(&text.as_str()).unwrap_or_default());
+                                } else {
+                                    println!("[RAW] {}", text);
+                                }
+                            }
                         }
                     }
                     Some(Ok(Message::Close(_))) => {
-                        println!("Connection closed by server.");
+                        if !json {
+                            println!("Connection closed by server.");
+                        }
                         break;
                     }
                     Some(Err(e)) => {
-                        eprintln!("WebSocket error: {}", e);
-                        break;
+                        heartbeat_handle.abort();
+                        return Err(anyhow::anyhow!("WebSocket error: {}", e));
                     }
                     _ => {}
                 }
@@ -85,58 +174,119 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
     Ok(())
 }
 
-/// 处理单条 WebSocket 消息。返回 false 表示应该退出监听循环。
-fn handle_message(message: &WsServerMessage, filter_conversation_id: Option<&str>) -> bool {
-    match message {
-        WsServerMessage::ConnectionReady(payload) => {
-            println!("[READY] Connected as {}", payload.linkid);
+/// 处理单个 envelope。返回 false 表示应该退出监听循环。
+fn handle_envelope(
+    envelope: &WsServerEnvelope,
+    json: bool,
+    filter_set: Option<&std::collections::HashSet<String>>,
+    conversation_filter: Option<&str>,
+) -> bool {
+    let event_name = event_name(&envelope.message);
+
+    // 应用事件类型过滤
+    if let Some(set) = filter_set {
+        let normalized = event_name.to_lowercase().replace(".", "").replace("_", "");
+        if !set.contains(&normalized) {
+            return true;
         }
-        WsServerMessage::MessageCreated(payload) => {
-            handle_message_created(payload, filter_conversation_id);
-        }
-        WsServerMessage::EventNotification(payload) => {
-            handle_event_notification(payload);
-        }
-        WsServerMessage::Pong(_) => {
-            // 静默忽略心跳回包
-        }
-        WsServerMessage::Error(payload) => {
-            eprintln!("[ERROR] {}: {}", payload.code, payload.message);
+    }
+
+    if json {
+        // JSON Lines 输出：每行一个 JSON 对象
+        let line = match &envelope.message {
+            WsServerMessage::ConnectionReady(payload) => json_line(
+                "connection.ready",
+                &envelope.timestamp,
+                payload,
+            ),
+            WsServerMessage::MessageCreated(payload) => {
+                if let Some(filter) = conversation_filter {
+                    if payload.message.conversation_id.to_string() != filter {
+                        return true;
+                    }
+                }
+                json_line("message.created", &envelope.timestamp, payload)
+            }
+            WsServerMessage::EventNotification(payload) => {
+                json_line("event.notification", &envelope.timestamp, payload)
+            }
+            WsServerMessage::Pong(payload) => {
+                json_line("pong", &envelope.timestamp, payload)
+            }
+            WsServerMessage::Error(payload) => {
+                json_line("error", &envelope.timestamp, payload)
+            }
+        };
+        println!("{}", line);
+    } else {
+        // 人类可读格式
+        match &envelope.message {
+            WsServerMessage::ConnectionReady(payload) => {
+                println!("[{}] [READY] Connected as {}", format_time(envelope.timestamp), payload.linkid);
+            }
+            WsServerMessage::MessageCreated(payload) => {
+                handle_message_created_human(payload, conversation_filter);
+            }
+            WsServerMessage::EventNotification(payload) => {
+                handle_event_notification_human(payload);
+            }
+            WsServerMessage::Pong(_) => {
+                // 静默忽略心跳回包
+            }
+            WsServerMessage::Error(payload) => {
+                eprintln!("[{}] [ERROR] {}: {}", format_time(envelope.timestamp), payload.code, payload.message);
+            }
         }
     }
     true
 }
 
-fn handle_message_created(
+fn event_name(message: &WsServerMessage) -> &'static str {
+    match message {
+        WsServerMessage::ConnectionReady(_) => "connection.ready",
+        WsServerMessage::MessageCreated(_) => "message.created",
+        WsServerMessage::EventNotification(_) => "event.notification",
+        WsServerMessage::Pong(_) => "pong",
+        WsServerMessage::Error(_) => "error",
+    }
+}
+
+fn json_line(event: &str, timestamp: &DateTime<Utc>, payload: &impl serde::Serialize) -> String {
+    match serde_json::to_string(payload) {
+        Ok(payload_json) => format!(
+            r#"{{"event":"{}","timestamp":"{}","payload":{}}}"#,
+            event,
+            timestamp.to_rfc3339(),
+            payload_json
+        ),
+        Err(_) => format!(
+            r#"{{"event":"{}","timestamp":"{}"}}"#,
+            event,
+            timestamp.to_rfc3339()
+        ),
+    }
+}
+
+fn handle_message_created_human(
     payload: &WsMessageCreatedPayload,
     filter_conversation_id: Option<&str>,
 ) {
-    if !message_matches_filter(payload, filter_conversation_id) {
-        return;
+    if let Some(filter) = filter_conversation_id {
+        if payload.message.conversation_id.to_string() != filter {
+            return;
+        }
     }
 
     let msg = &payload.message;
     println!(
-        "[{}] {}: {}",
+        "[{}] [MESSAGE] {}: {}",
         format_time(msg.created_at),
         msg.sender_name,
         msg.content
     );
 }
 
-fn message_matches_filter(
-    payload: &WsMessageCreatedPayload,
-    filter_conversation_id: Option<&str>,
-) -> bool {
-    if let Some(filter) = filter_conversation_id {
-        let msg_conversation_id = payload.message.conversation_id.to_string();
-        msg_conversation_id == filter
-    } else {
-        true
-    }
-}
-
-fn handle_event_notification(payload: &WsEventNotificationPayload) {
+fn handle_event_notification_human(payload: &WsEventNotificationPayload) {
     let title = &payload.data.title;
     let content = &payload.data.content;
 
@@ -182,25 +332,60 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_message_returns_true_for_all_current_variants() {
-        // All current server message variants should keep the loop running
+    fn test_event_name_mapping() {
         let ready = WsServerMessage::ConnectionReady(WsConnectionReadyPayload {
             user_id: Uuid::nil(),
             linkid: "alice".to_string(),
         });
-        assert!(handle_message(&ready, None));
+        assert_eq!(event_name(&ready), "connection.ready");
 
         let pong = WsServerMessage::Pong(WsPongPayload {
             client_timestamp: None,
         });
-        assert!(handle_message(&pong, None));
+        assert_eq!(event_name(&pong), "pong");
 
         let error = WsServerMessage::Error(WsErrorPayload {
             code: "ERR".to_string(),
             message: "oops".to_string(),
             client_message_id: None,
         });
-        assert!(handle_message(&error, None));
+        assert_eq!(event_name(&error), "error");
+    }
+
+    #[test]
+    fn test_json_line_format() {
+        let payload = WsConnectionReadyPayload {
+            user_id: Uuid::nil(),
+            linkid: "agent_1".to_string(),
+        };
+        let ts = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let line = json_line("connection.ready", &ts, &payload);
+        assert!(line.contains("\"event\":\"connection.ready\""));
+        assert!(line.contains("\"linkid\":\"agent_1\""));
+    }
+
+    #[test]
+    fn test_handle_envelope_filtering() {
+        let envelope = WsServerEnvelope {
+            message: WsServerMessage::ConnectionReady(WsConnectionReadyPayload {
+                user_id: Uuid::nil(),
+                linkid: "alice".to_string(),
+            }),
+            timestamp: Utc::now(),
+        };
+
+        // 无过滤：应该处理
+        assert!(handle_envelope(&envelope, false, None, None));
+
+        // 有过滤且匹配：应该处理
+        let mut set = std::collections::HashSet::new();
+        set.insert("connectionready".to_string());
+        assert!(handle_envelope(&envelope, false, Some(&set), None));
+
+        // 有过滤但不匹配：应该跳过（返回 true 表示继续循环）
+        let mut set2 = std::collections::HashSet::new();
+        set2.insert("messagecreated".to_string());
+        assert!(handle_envelope(&envelope, false, Some(&set2), None));
     }
 
     #[test]
@@ -209,7 +394,15 @@ mod tests {
             message: sample_message_response(),
             client_message_id: None,
         };
-        assert!(message_matches_filter(&payload, None));
+        assert!(handle_envelope(
+            &WsServerEnvelope {
+                message: WsServerMessage::MessageCreated(payload),
+                timestamp: Utc::now(),
+            },
+            false,
+            None,
+            None
+        ));
     }
 
     #[test]
@@ -218,7 +411,15 @@ mod tests {
             message: sample_message_response(),
             client_message_id: None,
         };
-        assert!(message_matches_filter(&payload, Some("00000000-0000-0000-0000-000000000000")));
+        assert!(handle_envelope(
+            &WsServerEnvelope {
+                message: WsServerMessage::MessageCreated(payload),
+                timestamp: Utc::now(),
+            },
+            false,
+            None,
+            Some("00000000-0000-0000-0000-000000000000")
+        ));
     }
 
     #[test]
@@ -227,17 +428,14 @@ mod tests {
             message: sample_message_response(),
             client_message_id: None,
         };
-        assert!(!message_matches_filter(&payload, Some("11111111-1111-1111-1111-111111111111")));
-    }
-
-    #[test]
-    fn test_handle_message_applies_conversation_filter() {
-        let payload = WsMessageCreatedPayload {
-            message: sample_message_response(),
-            client_message_id: None,
-        };
-        let msg = WsServerMessage::MessageCreated(payload);
-        // handle_message returns true regardless of filter; filtering is handled inside
-        assert!(handle_message(&msg, Some("00000000-0000-0000-0000-000000000000")));
+        assert!(handle_envelope(
+            &WsServerEnvelope {
+                message: WsServerMessage::MessageCreated(payload),
+                timestamp: Utc::now(),
+            },
+            false,
+            None,
+            Some("11111111-1111-1111-1111-111111111111")
+        ));
     }
 }

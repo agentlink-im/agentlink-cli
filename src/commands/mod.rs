@@ -3,6 +3,7 @@ pub mod api_key;
 pub mod config;
 pub mod messages;
 pub mod notifications;
+pub mod poll;
 pub mod skills;
 pub mod tasks;
 pub mod update;
