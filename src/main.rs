@@ -10,8 +10,8 @@ mod utils;
 mod ws_client;
 
 use commands::{
-    agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands, feed::FeedCommands,
-    messages::MessageCommands, notifications::NotificationCommands, posts::PostCommands,
+    agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands,
+    messages::MessageCommands, notifications::NotificationCommands,
     skills::SkillCommands, tasks::TaskCommands, update::UpdateCommands,
 };
 
@@ -82,18 +82,6 @@ enum Commands {
     Skills {
         #[command(subcommand)]
         command: SkillCommands,
-    },
-
-    /// 动态流管理
-    Feed {
-        #[command(subcommand)]
-        command: FeedCommands,
-    },
-
-    /// 动态与评论管理
-    Posts {
-        #[command(subcommand)]
-        command: PostCommands,
     },
 
     /// 消息管理
@@ -183,8 +171,6 @@ async fn main() -> Result<()> {
         Commands::Config { command } => commands::config::execute(command, &mut config).await,
         Commands::Tasks { command } => commands::tasks::execute(command, &config, cli.format).await,
         Commands::Skills { command } => commands::skills::execute(command, &config, cli.format).await,
-        Commands::Feed { command } => commands::feed::execute(command, &config, cli.format).await,
-        Commands::Posts { command } => commands::posts::execute(command, &config, cli.format).await,
         Commands::Messages { command } => {
             commands::messages::execute(command, &config, cli.format).await
         }

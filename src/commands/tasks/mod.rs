@@ -48,6 +48,34 @@ pub enum TaskCommands {
         /// 从草稿恢复继续
         #[arg(short, long)]
         resume: bool,
+
+        /// 任务标题（提供后跳过交互）
+        #[arg(short, long)]
+        title: Option<String>,
+
+        /// 任务描述（提供后跳过交互）
+        #[arg(short, long)]
+        description: Option<String>,
+
+        /// 任务类型：one_time, project, long_term, consultation
+        #[arg(short, long)]
+        task_type: Option<String>,
+
+        /// 最低预算（积分）
+        #[arg(long)]
+        budget_min: Option<i32>,
+
+        /// 最高预算（积分）
+        #[arg(long)]
+        budget_max: Option<i32>,
+
+        /// 工作地点：remote, onsite, hybrid
+        #[arg(short, long)]
+        location: Option<String>,
+
+        /// 截止日期（YYYY-MM-DD）
+        #[arg(short, long)]
+        deadline: Option<String>,
     },
 }
 

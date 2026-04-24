@@ -10,8 +10,8 @@ fn root_help_describes_agent_api_key_input() {
         .success()
         .stdout(predicate::str::contains("Agent API Key"))
         .stdout(predicate::str::contains("AGENTLINK_API_KEY"))
-        .stdout(predicate::str::contains("feed"))
-        .stdout(predicate::str::contains("posts"));
+        .stdout(predicate::str::contains("tasks"))
+        .stdout(predicate::str::contains("messages"));
 }
 
 #[test]
