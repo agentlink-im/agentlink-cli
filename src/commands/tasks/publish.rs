@@ -1,10 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDate, Utc};
 use colored::Colorize;
-use dialoguer::{Confirm, Editor, Input, MultiSelect, Select};
-use rust_decimal::Decimal;
+use dialoguer::{Confirm, Editor, Input, Select};
 use std::path::PathBuf;
-use uuid::Uuid;
 
 use crate::api::ApiClient;
 use crate::config::Config;
@@ -20,46 +18,30 @@ pub struct TaskPublishWizard {
 #[derive(Debug, Clone, Default)]
 pub struct TaskDraft {
     pub title: Option<String>,
-    pub kind: Option<TaskType>,
+    pub kind: Option<agentlink_protocol::TaskType>,
     pub description: Option<String>,
-    pub budget_min: Option<Decimal>,
-    pub budget_max: Option<Decimal>,
-    pub currency: String,
+    pub budget_min: Option<i32>,
+    pub budget_max: Option<i32>,
     pub location_type: Option<String>,
     pub deadline: Option<DateTime<Utc>>,
-    pub skill_ids: Vec<Uuid>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TaskType {
-    OneTime,
-    Project,
-    LongTerm,
-    Consultation,
+fn task_type_display_name(kind: agentlink_protocol::TaskType) -> &'static str {
+    match kind {
+        agentlink_protocol::TaskType::OneTime => "One Time (一次性任务)",
+        agentlink_protocol::TaskType::Project => "Project (项目制)",
+        agentlink_protocol::TaskType::LongTerm => "Long Term (长期合作)",
+        agentlink_protocol::TaskType::Consultation => "Consultation (咨询)",
+    }
 }
 
-impl TaskType {
-    fn as_str(&self) -> &'static str {
-        match self {
-            TaskType::OneTime => "one_time",
-            TaskType::Project => "project",
-            TaskType::LongTerm => "long_term",
-            TaskType::Consultation => "consultation",
-        }
-    }
-
-    fn display_name(&self) -> &'static str {
-        match self {
-            TaskType::OneTime => "One Time (一次性任务)",
-            TaskType::Project => "Project (项目制)",
-            TaskType::LongTerm => "Long Term (长期合作)",
-            TaskType::Consultation => "Consultation (咨询)",
-        }
-    }
-
-    fn all() -> Vec<TaskType> {
-        vec![TaskType::OneTime, TaskType::Project, TaskType::LongTerm, TaskType::Consultation]
-    }
+fn all_task_types() -> Vec<agentlink_protocol::TaskType> {
+    vec![
+        agentlink_protocol::TaskType::OneTime,
+        agentlink_protocol::TaskType::Project,
+        agentlink_protocol::TaskType::LongTerm,
+        agentlink_protocol::TaskType::Consultation,
+    ]
 }
 
 /// 草稿存储路径
@@ -165,11 +147,7 @@ impl TaskPublishWizard {
             self.draft.save()?;
         }
 
-        // Step 5: 技能选择
-        self.collect_skills().await?;
-        self.draft.save()?;
-
-        // Step 6: 确认和发布
+        // Step 5: 确认和发布
         let should_publish = self.review_and_confirm().await?;
 
         if should_publish {
@@ -203,8 +181,8 @@ impl TaskPublishWizard {
             .interact_text()?;
 
         // 任务类型
-        let task_types = TaskType::all();
-        let type_names: Vec<&str> = task_types.iter().map(|t| t.display_name()).collect();
+        let task_types = all_task_types();
+        let type_names: Vec<&str> = task_types.iter().copied().map(task_type_display_name).collect();
         let type_index = Select::new()
             .with_prompt("Task type")
             .items(&type_names)
@@ -269,15 +247,6 @@ impl TaskPublishWizard {
     async fn collect_budget(&mut self) -> Result<()> {
         println!("{}", "\n💰 Step 3: Budget Settings\n".bold());
 
-        // 货币
-        let currencies = vec!["USD", "CNY", "EUR", "GBP"];
-        let currency_index = Select::new()
-            .with_prompt("Currency")
-            .items(&currencies)
-            .default(0)
-            .interact()?;
-        self.draft.currency = currencies[currency_index].to_string();
-
         // 是否设置预算
         let has_budget = Confirm::new()
             .with_prompt("Do you want to set a budget range?")
@@ -286,16 +255,16 @@ impl TaskPublishWizard {
 
         if has_budget {
             // 最低预算
-            let min_budget: f64 = Input::new()
-                .with_prompt("Minimum budget")
-                .default(100.0)
+            let min_budget: i32 = Input::new()
+                .with_prompt("Minimum budget (points)")
+                .default(100)
                 .interact_text()?;
 
             // 最高预算
-            let max_budget: f64 = Input::new()
-                .with_prompt("Maximum budget")
-                .default(min_budget * 1.5)
-                .validate_with(|input: &f64| {
+            let max_budget: i32 = Input::new()
+                .with_prompt("Maximum budget (points)")
+                .default(min_budget * 3 / 2)
+                .validate_with(|input: &i32| {
                     if *input < min_budget {
                         Err("Maximum budget must be greater than or equal to minimum budget".to_string())
                     } else {
@@ -304,8 +273,8 @@ impl TaskPublishWizard {
                 })
                 .interact_text()?;
 
-            self.draft.budget_min = Decimal::from_f64_retain(min_budget);
-            self.draft.budget_max = Decimal::from_f64_retain(max_budget);
+            self.draft.budget_min = Some(min_budget);
+            self.draft.budget_max = Some(max_budget);
         }
 
         Ok(())
@@ -364,47 +333,7 @@ impl TaskPublishWizard {
         Ok(())
     }
 
-    /// Step 5: 收集技能
-    async fn collect_skills(&mut self) -> Result<()> {
-        println!("{}", "\n🎯 Step 5: Required Skills\n".bold());
-
-        let client = ApiClient::new(&self.config)?;
-        
-        match client.list_skills().await {
-            Ok(skills) => {
-                if skills.is_empty() {
-                    println!("{}", "No skills available in the catalog.".yellow());
-                    return Ok(());
-                }
-
-                let skill_names: Vec<String> = skills
-                    .iter()
-                    .map(|s| format!("{} ({})", s.name, s.category))
-                    .collect();
-
-                let selected = MultiSelect::new()
-                    .with_prompt("Select required skills (Space to select, Enter to confirm)")
-                    .items(&skill_names)
-                    .interact()?;
-
-                self.draft.skill_ids = selected.iter().map(|&i| skills[i].id).collect();
-            }
-            Err(e) => {
-                println!("{}", format!("Warning: Failed to load skills: {}", e).yellow());
-                let skip = Confirm::new()
-                    .with_prompt("Continue without skills?")
-                    .default(true)
-                    .interact()?;
-                if !skip {
-                    anyhow::bail!("Skill selection is required");
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Step 6: 审核和确认
+    /// Step 5: 审核和确认
     async fn review_and_confirm(&mut self) -> Result<bool> {
         loop {
             println!("{}", "\n👁️  Step 6: Review & Confirm\n".bold());
@@ -416,14 +345,14 @@ impl TaskPublishWizard {
 
             println!("{}", "Task Summary:".bold().underline());
             println!("  {}: {}", "Title".bold(), title);
-            println!("  {}: {}", "Type".bold(), kind.display_name());
+            println!("  {}: {}", "Type".bold(), task_type_display_name(*kind));
             println!(
                 "  {}: {}",
                 "Budget".bold(),
                 match (self.draft.budget_min, self.draft.budget_max) {
-                    (Some(min), Some(max)) => format!("{} {} - {}", min, self.draft.currency, max),
-                    (Some(min), None) => format!("{} {}+", min, self.draft.currency),
-                    (None, Some(max)) => format!("Up to {} {}", max, self.draft.currency),
+                    (Some(min), Some(max)) => format!("{} - {} pts", min, max),
+                    (Some(min), None) => format!("{}+ pts", min),
+                    (None, Some(max)) => format!("Up to {} pts", max),
                     (None, None) => "Not specified".to_string(),
                 }
             );
@@ -435,15 +364,6 @@ impl TaskPublishWizard {
                     .deadline
                     .map(|d| d.format("%Y-%m-%d").to_string())
                     .unwrap_or_else(|| "Not specified".to_string())
-            );
-            println!(
-                "  {}: {}",
-                "Skills".bold(),
-                if self.draft.skill_ids.is_empty() {
-                    "None".to_string()
-                } else {
-                    format!("{} selected", self.draft.skill_ids.len())
-                }
             );
             println!();
             println!("{}", "Description:".bold());
@@ -464,7 +384,7 @@ impl TaskPublishWizard {
             println!("{}", "─".repeat(60).dimmed());
             println!();
 
-            let options = vec!["Publish now", "Save as draft and exit", "Edit basic info", "Edit description", "Edit budget", "Edit work settings", "Edit skills"];
+            let options = vec!["Publish now", "Save as draft and exit", "Edit basic info", "Edit description", "Edit budget", "Edit work settings"];
             let choice = Select::new()
                 .with_prompt("What would you like to do?")
                 .items(&options)
@@ -494,11 +414,6 @@ impl TaskPublishWizard {
                     self.collect_work_settings().await?;
                     self.draft.save()?;
                 }
-                6 => {
-                    // Edit skills
-                    self.collect_skills().await?;
-                    self.draft.save()?;
-                }
                 _ => unreachable!(),
             }
         }
@@ -513,22 +428,11 @@ impl TaskPublishWizard {
         let request = agentlink_protocol::task::CreateTaskRequest {
             title: self.draft.title.clone().unwrap(),
             description: self.draft.description.clone().unwrap(),
-            kind: match self.draft.kind.unwrap() {
-                TaskType::OneTime => agentlink_protocol::TaskType::OneTime,
-                TaskType::Project => agentlink_protocol::TaskType::Project,
-                TaskType::LongTerm => agentlink_protocol::TaskType::LongTerm,
-                TaskType::Consultation => agentlink_protocol::TaskType::Consultation,
-            },
+            kind: self.draft.kind.unwrap(),
             budget_min: self.draft.budget_min,
             budget_max: self.draft.budget_max,
-            currency: Some(self.draft.currency.clone()),
             deadline: self.draft.deadline,
             location_type: self.draft.location_type.clone(),
-            skill_ids: if self.draft.skill_ids.is_empty() {
-                None
-            } else {
-                Some(self.draft.skill_ids.clone())
-            },
         };
 
         match client.create_task(request).await {
@@ -558,16 +462,14 @@ impl serde::Serialize for TaskDraft {
         S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("TaskDraft", 9)?;
+        let mut state = serializer.serialize_struct("TaskDraft", 7)?;
         state.serialize_field("title", &self.title)?;
-        state.serialize_field("kind", &self.kind.map(|k| k.as_str()))?;
+        state.serialize_field("kind", &self.kind)?;
         state.serialize_field("description", &self.description)?;
         state.serialize_field("budget_min", &self.budget_min)?;
         state.serialize_field("budget_max", &self.budget_max)?;
-        state.serialize_field("currency", &self.currency)?;
         state.serialize_field("location_type", &self.location_type)?;
         state.serialize_field("deadline", &self.deadline)?;
-        state.serialize_field("skill_ids", &self.skill_ids)?;
         state.end()
     }
 }
@@ -580,33 +482,23 @@ impl<'de> serde::Deserialize<'de> for TaskDraft {
         #[derive(serde::Deserialize)]
         struct TaskDraftHelper {
             title: Option<String>,
-            kind: Option<String>,
+            kind: Option<agentlink_protocol::TaskType>,
             description: Option<String>,
-            budget_min: Option<Decimal>,
-            budget_max: Option<Decimal>,
-            currency: Option<String>,
+            budget_min: Option<i32>,
+            budget_max: Option<i32>,
             location_type: Option<String>,
             deadline: Option<DateTime<Utc>>,
-            skill_ids: Option<Vec<Uuid>>,
         }
 
         let helper = TaskDraftHelper::deserialize(deserializer)?;
         Ok(TaskDraft {
             title: helper.title,
-            kind: helper.kind.and_then(|k| match k.as_str() {
-                "one_time" => Some(TaskType::OneTime),
-                "project" => Some(TaskType::Project),
-                "long_term" => Some(TaskType::LongTerm),
-                "consultation" => Some(TaskType::Consultation),
-                _ => None,
-            }),
+            kind: helper.kind,
             description: helper.description,
             budget_min: helper.budget_min,
             budget_max: helper.budget_max,
-            currency: helper.currency.unwrap_or_else(|| "USD".to_string()),
             location_type: helper.location_type,
             deadline: helper.deadline,
-            skill_ids: helper.skill_ids.unwrap_or_default(),
         })
     }
 }

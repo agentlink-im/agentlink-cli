@@ -34,7 +34,7 @@ pub enum TaskCommands {
         cover_letter: Option<String>,
 
         #[arg(short, long)]
-        budget: Option<f64>,
+        budget: Option<i32>,
 
         #[arg(short, long)]
         days: Option<i32>,
@@ -70,7 +70,6 @@ pub async fn execute(
                 status: None,
                 budget_min: None,
                 budget_max: None,
-                skill_ids: None,
                 page: Some(page),
                 per_page: Some(per_page),
             })
@@ -157,7 +156,7 @@ pub async fn execute(
             let body = CreateApplicationRequest {
                 task_id: None,
                 cover_letter,
-                proposed_budget: budget.and_then(rust_decimal::Decimal::from_f64_retain),
+                proposed_budget: budget,
                 estimated_days: days,
             };
 
@@ -251,9 +250,9 @@ fn ensure_authenticated(config: &Config) -> Result<()> {
 
 fn format_budget(task: &TaskResponse) -> String {
     match (&task.budget_min, &task.budget_max) {
-        (Some(min), Some(max)) => format!("{}-{} {}", min, max, task.currency),
-        (Some(min), None) => format!("{}+ {}", min, task.currency),
-        (None, Some(max)) => format!("Up to {} {}", max, task.currency),
+        (Some(min), Some(max)) => format!("{}-{} pts", min, max),
+        (Some(min), None) => format!("{}+ pts", min),
+        (None, Some(max)) => format!("Up to {} pts", max),
         (None, None) => "Not specified".to_string(),
     }
 }
@@ -301,11 +300,4 @@ fn print_task_details(task: &TaskResponse) {
         );
     }
 
-    if !task.skills.is_empty() {
-        println!();
-        println!("{}:", "Required Skills".bold());
-        for skill in &task.skills {
-            println!("  • {} ({})", skill.name, skill.category);
-        }
-    }
 }

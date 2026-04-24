@@ -5,7 +5,8 @@ use tokio::time::{interval, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use agentlink_protocol::ws_event::{
-    WsEventNotificationPayload, WsMessageCreatedPayload, WsServerEnvelope, WsServerMessage,
+    WsClientMessage, WsEventNotificationPayload, WsMessageCreatedPayload, WsPingPayload,
+    WsServerEnvelope, WsServerMessage,
 };
 
 use crate::config::Config;
@@ -31,13 +32,14 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
         let mut ticker = interval(Duration::from_secs(30));
         loop {
             ticker.tick().await;
-            let ping = serde_json::json!({
-                "type": "ping",
-                "payload": {
-                    "client_timestamp": Utc::now().to_rfc3339()
-                }
+            let ping = WsClientMessage::Ping(WsPingPayload {
+                client_timestamp: Some(Utc::now().to_rfc3339()),
             });
-            if write.send(Message::Text(ping.to_string().into())).await.is_err() {
+            let ping_json = match serde_json::to_string(&ping) {
+                Ok(json) => json,
+                Err(_) => break,
+            };
+            if write.send(Message::Text(ping_json.into())).await.is_err() {
                 break;
             }
         }

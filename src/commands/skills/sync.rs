@@ -11,9 +11,9 @@ pub async fn sync_skills(config: &Config, dir: Option<PathBuf>) -> Result<()> {
     let skills_dir = match dir {
         Some(d) => d,
         None => {
-            let data_dir =
-                dirs::data_dir().context("Failed to get data directory")?;
-            data_dir.join("agentlink").join("skills")
+            let home_dir =
+                dirs::home_dir().context("Failed to get home directory")?;
+            home_dir.join(".agents").join("skills")
         }
     };
 
@@ -42,7 +42,7 @@ pub async fn sync_skills(config: &Config, dir: Option<PathBuf>) -> Result<()> {
     for skill in skills {
         let skill_dir = skills_dir.join(&skill.name);
 
-        match write_skill_to_dir(&skill, &skill_dir).await {
+        match download_and_extract_skill(&client, &skill, &skill_dir).await {
             Ok(_) => {
                 println!("  ✓ {}", skill.name);
                 synced += 1;
@@ -70,35 +70,66 @@ pub async fn sync_skills(config: &Config, dir: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-async fn write_skill_to_dir(
+async fn download_and_extract_skill(
+    client: &ApiClient,
     skill: &agentlink_protocol::user::InstalledSkill,
-    skill_dir: &PathBuf,
+    skill_dir: &std::path::Path,
 ) -> Result<()> {
-    std::fs::create_dir_all(skill_dir).with_context(|| {
-        format!(
-            "Failed to create skill directory: {}",
-            skill_dir.display()
-        )
-    })?;
+    // Clean and recreate the skill directory
+    if skill_dir.exists() {
+        std::fs::remove_dir_all(skill_dir)
+            .with_context(|| format!("Failed to remove old skill dir: {}", skill_dir.display()))?;
+    }
+    std::fs::create_dir_all(skill_dir)
+        .with_context(|| format!("Failed to create skill directory: {}", skill_dir.display()))?;
 
-    let skill_meta = serde_json::json!({
-        "id": skill.id,
-        "name": skill.name,
-        "category": skill.category,
-        "runtime_type": skill.runtime_type,
-        "install_payload": skill.install_payload,
-        "local_config": skill.local_config,
-        "installed_at": skill.installed_at,
-    });
+    // Download the .skills bundle
+    let bundle_bytes = client
+        .download_skill_bundle(&skill.id.to_string())
+        .await
+        .with_context(|| format!("Failed to download skill bundle for {}", skill.name))?;
 
+    // Extract zip contents
+    extract_zip(&bundle_bytes, skill_dir)
+        .with_context(|| format!("Failed to extract skill bundle for {}", skill.name))?;
+
+    // Write metadata file for reference
     let meta_path = skill_dir.join("skill.json");
-    std::fs::write(&meta_path, serde_json::to_string_pretty(&skill_meta)?)
+    std::fs::write(&meta_path, serde_json::to_string_pretty(skill)?)
         .with_context(|| {
             format!(
                 "Failed to write skill metadata: {}",
                 meta_path.display()
             )
         })?;
+
+    Ok(())
+}
+
+fn extract_zip(data: &[u8], dest_dir: &std::path::Path) -> Result<()> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive = zip::ZipArchive::new(cursor)
+        .context("Failed to open zip archive")?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)
+            .context("Failed to read zip entry")?;
+        let out_path = dest_dir.join(file.mangled_name());
+
+        if file.is_dir() {
+            std::fs::create_dir_all(&out_path)
+                .with_context(|| format!("Failed to create directory: {}", out_path.display()))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create parent directory: {}", parent.display()))?;
+            }
+            let mut out_file = std::fs::File::create(&out_path)
+                .with_context(|| format!("Failed to create file: {}", out_path.display()))?;
+            std::io::copy(&mut file, &mut out_file)
+                .with_context(|| format!("Failed to write file: {}", out_path.display()))?;
+        }
+    }
 
     Ok(())
 }

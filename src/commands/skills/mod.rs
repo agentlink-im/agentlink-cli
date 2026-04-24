@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Subcommand;
+use colored::Colorize;
 use std::path::PathBuf;
 
 use crate::api::ApiClient;
@@ -39,6 +40,16 @@ pub enum SkillCommands {
         /// Custom directory to sync skills to (optional)
         #[arg(short, long)]
         dir: Option<String>,
+    },
+    /// Show today's skill upload stats and list today's uploads
+    Today {
+        /// Page number
+        #[arg(short, long, default_value = "1")]
+        page: i32,
+
+        /// Items per page
+        #[arg(long = "per-page", default_value = "20")]
+        per_page: i32,
     },
 }
 
@@ -152,6 +163,75 @@ pub async fn execute(
                             Ok(())
                         }
                     }
+                }
+            }
+        }
+        SkillCommands::Today { page, per_page } => {
+            ensure_authenticated(config)?;
+            let client = ApiClient::new(config)?;
+
+            // Fetch stats
+            match client.get_skill_upload_stats().await {
+                Ok(stats) => {
+                    println!("\n{}", "Skill Upload Stats".bold().underline());
+                    println!("  {}: {}", "Total Uploads".bold(), stats.total_uploads);
+                    println!("  {}: {}", "Today Uploads".bold(), stats.today_uploads);
+                }
+                Err(e) => {
+                    print_error(&format!("Failed to get upload stats: {}", e));
+                    return Ok(());
+                }
+            }
+
+            // Fetch today's uploads
+            match client
+                .list_today_skill_uploads(agentlink_protocol::skill::TodaySkillUploadQuery {
+                    page: Some(page),
+                    per_page: Some(per_page),
+                })
+                .await
+            {
+                Ok(response) => {
+                    if response.data.is_empty() {
+                        println!("\n{}", "No skill uploads today.".yellow());
+                        return Ok(());
+                    }
+
+                    match format {
+                        crate::OutputFormat::Json => {
+                            println!("{}", serde_json::to_string_pretty(&response)?);
+                        }
+                        crate::OutputFormat::Yaml => {
+                            println!("{}", serde_yaml::to_string(&response)?);
+                        }
+                        _ => {
+                            println!("\n{}", "Today's Uploads".bold().underline());
+                            let headers = vec!["ID", "Name", "Version", "Status", "Created"];
+                            let rows: Vec<Vec<String>> = response
+                                .data
+                                .iter()
+                                .map(|item| {
+                                    vec![
+                                        item.id.to_string(),
+                                        item.name.clone(),
+                                        item.version.clone(),
+                                        format!("{:?}", item.status).to_lowercase(),
+                                        item.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                                    ]
+                                })
+                                .collect();
+                            print_table(headers, rows);
+                            println!(
+                                "\nPage {}/{} | Total: {}",
+                                response.page, response.total_pages, response.total
+                            );
+                        }
+                    }
+                    Ok(())
+                }
+                Err(e) => {
+                    print_error(&format!("Failed to list today's uploads: {}", e));
+                    Ok(())
                 }
             }
         }

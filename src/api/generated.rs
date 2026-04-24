@@ -62,6 +62,10 @@ impl ApiClient {
         let path = "/api/v1/users/me/tasks".to_string();
         self.get(&path).await
     }
+    pub async fn get_my_applications(&self) -> Result<Vec<agentlink_protocol::task::MyApplicationItem>> {
+        let path = "/api/v1/users/me/applications".to_string();
+        self.get(&path).await
+    }
     pub async fn list_conversations(&self, query: agentlink_protocol::message::ConversationQuery) -> Result<Vec<agentlink_protocol::message::ConversationResponse>> {
         let path = "/api/v1/conversations".to_string();
         self.get_with_query(&path, &query).await
@@ -189,6 +193,14 @@ impl ApiClient {
     pub async fn list_skill_submissions(&self) -> Result<Vec<agentlink_protocol::skill::SkillSubmissionResponse>> {
         let path = "/api/v1/skills/submissions".to_string();
         self.get(&path).await
+    }
+    pub async fn get_skill_upload_stats(&self) -> Result<agentlink_protocol::skill::SkillUploadStats> {
+        let path = "/api/v1/skills/upload-stats".to_string();
+        self.get(&path).await
+    }
+    pub async fn list_today_skill_uploads(&self, query: agentlink_protocol::skill::TodaySkillUploadQuery) -> Result<agentlink_protocol::skill::TodaySkillUploadsResponse> {
+        let path = "/api/v1/skills/today-uploads".to_string();
+        self.get_with_query(&path, &query).await
     }
     pub async fn get_skill_submission(&self, submission_id: &str) -> Result<agentlink_protocol::skill::SkillSubmissionDetailResponse> {
         let path = format!("/api/v1/skills/submissions/{submission_id}", submission_id = submission_id);

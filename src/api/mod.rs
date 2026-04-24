@@ -20,6 +20,11 @@ impl ApiClient {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
+            // Disable automatic system proxy detection.
+            // reqwest by default reads HTTP_PROXY/HTTPS_PROXY env vars,
+            // which can cause "tunnel error / Connection refused" when the
+            // proxy is not running. Use explicit config if proxy is needed.
+            .no_proxy()
             .build()
             .context("Failed to create HTTP client")?;
 
@@ -203,6 +208,26 @@ impl ApiClient {
         }
 
         Ok(user)
+    }
+
+    /// Download a published skill bundle as raw bytes.
+    pub async fn download_skill_bundle(&self, skill_id: &str) -> Result<Vec<u8>> {
+        let url = format!("{}/api/v1/skills/{}/download", self.base_url, skill_id);
+        let mut request = self.client.get(&url);
+        if let Some(token) = &self.auth_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+        let response = request.send().await.context("Failed to send request")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Self::http_error(status.as_u16(), &body);
+        }
+
+        response.bytes().await
+            .map(|b| b.to_vec())
+            .context("Failed to read response body")
     }
 
     pub async fn get_task(&self, task_id: &str) -> Result<agentlink_protocol::task::TaskResponse> {
