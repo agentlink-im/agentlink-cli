@@ -27,6 +27,13 @@ pub enum PollCommands {
         /// 最大重连间隔（秒）
         #[arg(long, default_value = "60")]
         max_backoff: u64,
+
+        /// 收到事件时执行的外部命令（事件 JSON 通过 stdin 传入）
+        ///
+        /// 示例: --exec "python3 ./handler.py"
+        /// 示例: --exec "./notify.sh"
+        #[arg(long)]
+        exec: Option<String>,
     },
 }
 
@@ -37,9 +44,10 @@ pub async fn execute(command: PollCommands, config: &Config) -> Result<()> {
             filters,
             reconnect,
             max_backoff,
+            exec,
         } => {
             if let Err(error) =
-                crate::ws_client::run_poll(config, json, filters, reconnect, max_backoff, None).await
+                crate::ws_client::run_poll(config, json, filters, reconnect, max_backoff, exec, None).await
             {
                 print_error(&format!("Poll error: {}", error));
             }
