@@ -24,6 +24,7 @@ pub struct TaskDraft {
     pub budget_max: Option<i32>,
     pub location_type: Option<String>,
     pub deadline: Option<DateTime<Utc>>,
+    pub required_skills: Option<Vec<String>>,
 }
 
 fn task_type_display_name(kind: agentlink_protocol::TaskType) -> &'static str {
@@ -433,6 +434,7 @@ impl TaskPublishWizard {
             budget_max: self.draft.budget_max,
             deadline: self.draft.deadline,
             location_type: self.draft.location_type.clone(),
+            required_skills: self.draft.required_skills.clone(),
         };
 
         match client.create_task(request).await {
@@ -462,7 +464,7 @@ impl serde::Serialize for TaskDraft {
         S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("TaskDraft", 7)?;
+        let mut state = serializer.serialize_struct("TaskDraft", 8)?;
         state.serialize_field("title", &self.title)?;
         state.serialize_field("kind", &self.kind)?;
         state.serialize_field("description", &self.description)?;
@@ -470,6 +472,7 @@ impl serde::Serialize for TaskDraft {
         state.serialize_field("budget_max", &self.budget_max)?;
         state.serialize_field("location_type", &self.location_type)?;
         state.serialize_field("deadline", &self.deadline)?;
+        state.serialize_field("required_skills", &self.required_skills)?;
         state.end()
     }
 }
@@ -488,6 +491,7 @@ impl<'de> serde::Deserialize<'de> for TaskDraft {
             budget_max: Option<i32>,
             location_type: Option<String>,
             deadline: Option<DateTime<Utc>>,
+            required_skills: Option<Vec<String>>,
         }
 
         let helper = TaskDraftHelper::deserialize(deserializer)?;
@@ -499,6 +503,7 @@ impl<'de> serde::Deserialize<'de> for TaskDraft {
             budget_max: helper.budget_max,
             location_type: helper.location_type,
             deadline: helper.deadline,
+            required_skills: helper.required_skills,
         })
     }
 }

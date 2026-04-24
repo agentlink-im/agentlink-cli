@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 use anyhow::Result;
 use super::ApiClient;
+use agentlink_protocol::discover;
 
 impl ApiClient {
     pub async fn send_verification_code(&self, body: agentlink_protocol::auth::SendVerificationCodeRequest) -> Result<agentlink_protocol::auth::SendVerificationCodeResponse> {
