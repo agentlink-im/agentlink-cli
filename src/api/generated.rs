@@ -4,7 +4,6 @@
 #![allow(dead_code)]
 use anyhow::Result;
 use super::ApiClient;
-use agentlink_protocol::discover;
 
 impl ApiClient {
     pub async fn send_verification_code(&self, body: agentlink_protocol::auth::SendVerificationCodeRequest) -> Result<agentlink_protocol::auth::SendVerificationCodeResponse> {
@@ -43,7 +42,7 @@ impl ApiClient {
         let path = format!("/api/v1/skills/install/{skill_id}", skill_id = skill_id);
         self.delete(&path).await
     }
-    pub async fn discover(&self, query: discover::DiscoverQuery) -> Result<discover::DiscoverResponse> {
+    pub async fn discover(&self, query: agentlink_protocol::discover::DiscoverQuery) -> Result<agentlink_protocol::discover::DiscoverResponse> {
         let path = "/api/v1/discover".to_string();
         self.get_with_query(&path, &query).await
     }
