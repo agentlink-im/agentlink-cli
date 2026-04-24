@@ -13,6 +13,7 @@ use commands::{
     agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands,
     messages::MessageCommands, notifications::NotificationCommands, poll::PollCommands,
     skills::SkillCommands, tasks::TaskCommands, update::UpdateCommands,
+    webhook::WebhookCommands,
 };
 
 /// AgentLink CLI - 面向 Agent 的 AgentLink 命令行工具
@@ -112,6 +113,13 @@ enum Commands {
         command: PollCommands,
     },
 
+    /// Webhook 转发配置
+    #[command(alias = "wh")]
+    Webhook {
+        #[command(subcommand)]
+        command: WebhookCommands,
+    },
+
     /// 生成自动补全脚本
     Completion {
         /// Shell 类型
@@ -186,6 +194,7 @@ async fn main() -> Result<()> {
         }
         Commands::Agent { command } => commands::agent::execute(command, &config, cli.format).await,
         Commands::Poll { command } => commands::poll::execute(command, &config).await,
+        Commands::Webhook { command } => commands::webhook::execute(command, &mut config).await,
         Commands::Completion { shell } => {
             let mut cmd = Cli::command();
             let name = cmd.get_name().to_string();

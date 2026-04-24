@@ -13,6 +13,11 @@ pub struct Config {
     #[serde(default = "default_websocket_url")]
     pub websocket_url: String,
 
+    /// Webhook 转发地址
+    /// CLI 通过 WebSocket 收到事件后，会 HTTP POST 到该地址
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+
     /// 持久化的 Agent API Key（sk_*）
     /// 兼容历史字段名 `user_token`
     #[serde(default, alias = "user_token")]
@@ -63,6 +68,7 @@ impl Default for Config {
         Self {
             server_url: default_server_url(),
             websocket_url: default_websocket_url(),
+            webhook_url: None,
             api_key: None,
             defaults: Defaults::default(),
             runtime_api_key: None,
@@ -228,6 +234,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.server_url, "https://beta-api.agentlink.chat/");
         assert_eq!(config.websocket_url, "wss://beta-api.agentlink.chat/");
+        assert!(config.webhook_url.is_none());
         assert!(config.api_key.is_none());
         assert!(config.runtime_api_key.is_none());
     }

@@ -21,6 +21,7 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
         false,       // no auto-reconnect
         60,          // max_backoff unused
         None,        // no exec command
+        None,        // no webhook
         conversation_id.as_deref(),
     )
     .await
@@ -38,6 +39,9 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
 ///
 /// 当 `exec_command` 为 Some 时，每个事件都会通过 stdin 传给该命令，
 /// 便于实现事件驱动的自动化 pipeline。
+///
+/// 当 `webhook_url` 为 Some 时，每个事件都会 HTTP POST 到该地址，
+/// 实现 CLI 作为 WebSocket→HTTP 的桥接层。
 pub async fn run_poll(
     config: &Config,
     json: bool,
@@ -45,6 +49,7 @@ pub async fn run_poll(
     reconnect: bool,
     max_backoff_secs: u64,
     exec_command: Option<String>,
+    webhook_url: Option<String>,
     conversation_filter: Option<&str>,
 ) -> Result<()> {
     let token = config.require_api_key()?;
@@ -69,7 +74,7 @@ pub async fn run_poll(
     let mut backoff_secs = 1u64;
 
     loop {
-        match connect_and_listen(&url, json, filter_set.as_ref(), exec_command.as_deref(), conversation_filter).await {
+        match connect_and_listen(&url, json, filter_set.as_ref(), exec_command.as_deref(), webhook_url.as_deref(), conversation_filter).await {
             Ok(()) => {
                 if !reconnect {
                     break;
@@ -104,6 +109,7 @@ async fn connect_and_listen(
     json: bool,
     filter_set: Option<&std::collections::HashSet<String>>,
     exec_command: Option<&str>,
+    webhook_url: Option<&str>,
     conversation_filter: Option<&str>,
 ) -> Result<()> {
     let (ws_stream, _) = connect_async(url)
@@ -147,7 +153,7 @@ async fn connect_and_listen(
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<WsServerEnvelope>(&text) {
                             Ok(envelope) => {
-                                if !handle_envelope(&envelope, json, filter_set, exec_command, conversation_filter).await {
+                                if !handle_envelope(&envelope, json, filter_set, exec_command, webhook_url, conversation_filter).await {
                                     break;
                                 }
                             }
@@ -186,6 +192,7 @@ async fn handle_envelope(
     json: bool,
     filter_set: Option<&std::collections::HashSet<String>>,
     exec_command: Option<&str>,
+    webhook_url: Option<&str>,
     conversation_filter: Option<&str>,
 ) -> bool {
     let event_name = event_name(&envelope.message);
@@ -215,6 +222,45 @@ async fn handle_envelope(
         tokio::spawn(async move {
             if let Err(e) = run_exec_command(&cmd, &event_json).await {
                 eprintln!("[EXEC ERROR] {}: {}", cmd, e);
+            }
+        });
+    }
+
+    // 转发到 webhook（异步，不阻塞 WebSocket 读取）
+    if let Some(url) = webhook_url {
+        let url = url.to_string();
+        let event_json = event_json.clone();
+        tokio::spawn(async move {
+            let client = match reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[WEBHOOK ERROR] Failed to create client: {}", e);
+                    return;
+                }
+            };
+
+            let result = client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("User-Agent", format!("agentlink-cli/{} webhook-forwarder", env!("CARGO_PKG_VERSION")))
+                .body(event_json)
+                .send()
+                .await;
+
+            match result {
+                Ok(response) => {
+                    let status = response.status();
+                    if !status.is_success() {
+                        let body = response.text().await.unwrap_or_default();
+                        eprintln!("[WEBHOOK ERROR] {}: {}", status, body);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[WEBHOOK ERROR] Failed to forward: {}", e);
+                }
             }
         });
     }
@@ -466,17 +512,17 @@ mod tests {
         };
 
         // 无过滤：应该处理
-        assert!(tokio::runtime::Runtime::new().unwrap().block_on(handle_envelope(&envelope, false, None, None, None)));
+        assert!(tokio::runtime::Runtime::new().unwrap().block_on(handle_envelope(&envelope, false, None, None, None, None)));
 
         // 有过滤且匹配：应该处理
         let mut set = std::collections::HashSet::new();
         set.insert("connectionready".to_string());
-        assert!(tokio::runtime::Runtime::new().unwrap().block_on(handle_envelope(&envelope, false, Some(&set), None, None)));
+        assert!(tokio::runtime::Runtime::new().unwrap().block_on(handle_envelope(&envelope, false, Some(&set), None, None, None)));
 
         // 有过滤但不匹配：应该跳过（返回 true 表示继续循环）
         let mut set2 = std::collections::HashSet::new();
         set2.insert("messagecreated".to_string());
-        assert!(tokio::runtime::Runtime::new().unwrap().block_on(handle_envelope(&envelope, false, Some(&set2), None, None)));
+        assert!(tokio::runtime::Runtime::new().unwrap().block_on(handle_envelope(&envelope, false, Some(&set2), None, None, None)));
     }
 
     #[test]
@@ -491,6 +537,7 @@ mod tests {
                 timestamp: Utc::now(),
             },
             false,
+            None,
             None,
             None,
             None
@@ -511,6 +558,7 @@ mod tests {
             false,
             None,
             None,
+            None,
             Some("00000000-0000-0000-0000-000000000000")
         )));
     }
@@ -527,6 +575,7 @@ mod tests {
                 timestamp: Utc::now(),
             },
             false,
+            None,
             None,
             None,
             Some("11111111-1111-1111-1111-111111111111")

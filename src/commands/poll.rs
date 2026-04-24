@@ -34,6 +34,13 @@ pub enum PollCommands {
         /// 示例: --exec "./notify.sh"
         #[arg(long)]
         exec: Option<String>,
+
+        /// Webhook 转发地址（覆盖配置文件中的设置）
+        ///
+        /// CLI 会将收到的每个事件实时 HTTP POST 到该地址。
+        /// 也可通过 `agentlink webhook set <url>` 持久化配置。
+        #[arg(long)]
+        webhook_url: Option<String>,
     },
 }
 
@@ -45,9 +52,16 @@ pub async fn execute(command: PollCommands, config: &Config) -> Result<()> {
             reconnect,
             max_backoff,
             exec,
+            webhook_url,
         } => {
-            if let Err(error) =
-                crate::ws_client::run_poll(config, json, filters, reconnect, max_backoff, exec, None).await
+            // 命令行参数优先，其次配置文件
+            let resolved_webhook = webhook_url.as_ref()
+                .or(config.webhook_url.as_ref())
+                .cloned();
+
+            if let Err(error) = crate::ws_client::run_poll(
+                config, json, filters, reconnect, max_backoff, exec, resolved_webhook, None,
+            ).await
             {
                 print_error(&format!("Poll error: {}", error));
             }

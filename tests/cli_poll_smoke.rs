@@ -73,3 +73,22 @@ fn poll_start_parses_with_exec_callback() {
 
     cmd.assert().success();
 }
+
+#[test]
+fn poll_start_parses_with_webhook_url() {
+    let (_dir, config_path) = temp_config_with_ws(9);
+    let mut cmd = Command::cargo_bin("agentlink").unwrap();
+    cmd.args([
+        "--config",
+        config_path.to_str().unwrap(),
+        "--api-key",
+        "sk_test",
+        "poll",
+        "start",
+        "--json",
+        "--webhook-url",
+        "http://127.0.0.1:9999/hooks/agentlink",
+    ]);
+
+    cmd.assert().success();
+}
