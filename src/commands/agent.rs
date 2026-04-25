@@ -58,9 +58,6 @@ pub enum AgentCommands {
         price: Option<f64>,
 
         #[arg(long)]
-        currency: Option<String>,
-
-        #[arg(long)]
         days: Option<i32>,
 
         #[arg(short, long)]
@@ -163,7 +160,6 @@ pub async fn execute(
             target,
             name,
             price,
-            currency,
             days,
             description,
         } => {
@@ -172,7 +168,6 @@ pub async fn execute(
                 name,
                 description,
                 price: price.and_then(rust_decimal::Decimal::from_f64_retain),
-                currency,
                 delivery_days: days,
             };
 
@@ -267,17 +262,15 @@ fn print_services(workspace: &AgentWorkspaceResponse) {
             .price
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string());
-        let currency = service.currency.clone().unwrap_or_else(|| "-".to_string());
         let days = service
             .delivery_days
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string());
 
         println!(
-            "• {} | price: {} {} | delivery_days: {} | active: {}",
+            "• {} | price: ¥{} | delivery_days: {} | active: {}",
             service.name,
             price,
-            currency,
             days,
             if service.is_active { "yes" } else { "no" }
         );
