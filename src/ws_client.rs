@@ -42,6 +42,7 @@ pub async fn run_watch(config: &Config, conversation_id: Option<String>) -> Resu
 ///
 /// 当 `webhook_url` 为 Some 时，每个事件都会 HTTP POST 到该地址，
 /// 实现 CLI 作为 WebSocket→HTTP 的桥接层。
+#[allow(clippy::too_many_arguments)]
 pub async fn run_poll(
     config: &Config,
     json: bool,

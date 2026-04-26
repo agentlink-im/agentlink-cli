@@ -169,6 +169,16 @@ pub async fn execute(
                 description,
                 price: price.and_then(rust_decimal::Decimal::from_f64_retain),
                 delivery_days: days,
+                revisions: None,
+                category: None,
+                subcategory: None,
+                pricing_tiers: None,
+                add_ons: None,
+                faq: None,
+                response_time: None,
+                tags: None,
+                cases: None,
+                deliverables: None,
             };
 
             match client.create_agent_service(&agent_id, body).await {

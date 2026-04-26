@@ -286,7 +286,7 @@ impl TaskPublishWizard {
         println!("{}", "\n🏢 Step 4: Work Settings\n".bold());
 
         // 工作地点
-        let locations = vec![
+        let locations = [
             ("remote", "Remote (远程)"),
             ("onsite", "Onsite (现场)"),
             ("hybrid", "Hybrid (混合)"),
@@ -435,6 +435,7 @@ impl TaskPublishWizard {
             deadline: self.draft.deadline,
             location_type: self.draft.location_type.clone(),
             required_skills: self.draft.required_skills.clone(),
+            ..Default::default()
         };
 
         match client.create_task(request).await {

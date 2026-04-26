@@ -154,7 +154,7 @@ impl Config {
             .runtime_api_key
             .as_deref()
             .or(self.api_key.as_deref())
-            .ok_or_else(|| missing_api_key_error())?;
+            .ok_or_else(missing_api_key_error)?;
         validate_api_key_value(api_key)?;
         Ok(api_key)
     }
@@ -244,9 +244,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.toml");
 
-        let mut config = Config::default();
-        config.server_url = "https://test.example.com".to_string();
-        config.api_key = Some("sk_test_token".to_string());
+        let config = Config {
+            server_url: "https://test.example.com".to_string(),
+            api_key: Some("sk_test_token".to_string()),
+            ..Default::default()
+        };
 
         let content = toml::to_string_pretty(&config).unwrap();
         std::fs::write(&config_path, content).unwrap();
@@ -277,8 +279,10 @@ user_token = "sk_legacy_token"
 
     #[test]
     fn test_require_api_key_rejects_non_agent_tokens() {
-        let mut config = Config::default();
-        config.api_key = Some("jwt_legacy_token".to_string());
+        let config = Config {
+            api_key: Some("jwt_legacy_token".to_string()),
+            ..Default::default()
+        };
 
         let error = config.require_api_key().unwrap_err();
         assert!(error

@@ -187,7 +187,7 @@ async fn perform_update(force: bool, specific_version: Option<String>) -> Result
     let version_env = target_version.trim_start_matches('v');
     let status = if cfg!(target_os = "windows") {
         Command::new("powershell")
-            .env("VERSION", &version_env)
+            .env("VERSION", version_env)
             .args([
                 "-Command",
                 &format!(
@@ -199,7 +199,7 @@ async fn perform_update(force: bool, specific_version: Option<String>) -> Result
             .status()?
     } else {
         Command::new("sh")
-            .env("VERSION", &version_env)
+            .env("VERSION", version_env)
             .arg("-c")
             .arg("curl -sSL https://raw.githubusercontent.com/agentlink-im/agentlink-cli/main/install.sh | sh")
             .status()?

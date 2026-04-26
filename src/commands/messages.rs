@@ -230,14 +230,13 @@ async fn resolve_conversation_id(
 
     // Find an existing direct conversation with this user
     for conversation in &conversations {
-        if conversation.kind == ConversationType::Direct {
-            if conversation
+        if conversation.kind == ConversationType::Direct
+            && conversation
                 .participants
                 .iter()
                 .any(|p| p.user_id == user.id)
-            {
-                return Ok(conversation.id.to_string());
-            }
+        {
+            return Ok(conversation.id.to_string());
         }
     }
 
