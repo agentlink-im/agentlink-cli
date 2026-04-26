@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
-use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success};
 
 pub async fn sync_skills(config: &Config, dir: Option<PathBuf>) -> Result<()> {
-    let client = ApiClient::new(config)?;
+    let client = config.to_client()?;
 
     let skills_dir = match dir {
         Some(d) => d,
@@ -27,6 +26,7 @@ pub async fn sync_skills(config: &Config, dir: Option<PathBuf>) -> Result<()> {
     println!("Syncing skills to {}...", skills_dir.display());
 
     let skills = client
+        .users
         .list_installed_skills()
         .await
         .with_context(|| "Failed to fetch installed skills")?;
@@ -71,7 +71,7 @@ pub async fn sync_skills(config: &Config, dir: Option<PathBuf>) -> Result<()> {
 }
 
 async fn download_and_extract_skill(
-    client: &ApiClient,
+    client: &agentlink_rust_sdk::AgentLinkClient,
     skill: &agentlink_protocol::user::InstalledSkill,
     skill_dir: &std::path::Path,
 ) -> Result<()> {
@@ -85,6 +85,7 @@ async fn download_and_extract_skill(
 
     // Download the .skills bundle
     let bundle_bytes = client
+        .skills
         .download_skill_bundle(&skill.id.to_string())
         .await
         .with_context(|| format!("Failed to download skill bundle for {}", skill.name))?;

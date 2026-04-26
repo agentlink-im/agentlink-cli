@@ -4,7 +4,6 @@ use colored::Colorize;
 use dialoguer::{Confirm, Editor, Input, Select};
 use std::path::PathBuf;
 
-use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success};
 
@@ -424,7 +423,7 @@ impl TaskPublishWizard {
     async fn publish_task(&self) -> Result<()> {
         println!("\n{}", "Publishing task...".dimmed());
 
-        let client = ApiClient::new(&self.config)?;
+        let client = self.config.to_client()?;
 
         let request = agentlink_protocol::task::CreateTaskRequest {
             title: self.draft.title.clone().unwrap(),
@@ -438,7 +437,7 @@ impl TaskPublishWizard {
             ..Default::default()
         };
 
-        match client.create_task(request).await {
+        match client.tasks.create_task(request).await {
             Ok(task) => {
                 print_success("Task published successfully!");
                 println!("\n  {}: {}", "Task ID".bold(), task.id);
@@ -452,7 +451,7 @@ impl TaskPublishWizard {
             }
             Err(e) => {
                 print_error(&format!("Failed to publish task: {}", e));
-                Err(e)
+                Ok(())
             }
         }
     }

@@ -3,7 +3,6 @@ use clap::Subcommand;
 use colored::Colorize;
 use std::path::PathBuf;
 
-use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success, print_table};
 
@@ -84,10 +83,10 @@ pub async fn execute(
         }
         SkillCommands::Submissions(sub_cmd) => {
             ensure_authenticated(config)?;
-            let client = ApiClient::new(config)?;
+            let client = config.to_client()?;
             match sub_cmd {
                 SubmissionCommands::List => {
-                    match client.list_skill_submissions().await {
+                    match client.skills.list_skill_submissions().await {
                         Ok(submissions) => {
                             if submissions.is_empty() {
                                 println!("No skill submissions found.");
@@ -124,7 +123,7 @@ pub async fn execute(
                     }
                 }
                 SubmissionCommands::Show { id } => {
-                    match client.get_skill_submission(&id).await {
+                    match client.skills.get_skill_submission(&id).await {
                         Ok(submission) => {
                             match format {
                                 crate::OutputFormat::Json => {
@@ -153,7 +152,7 @@ pub async fn execute(
                     }
                 }
                 SubmissionCommands::Withdraw { id } => {
-                    match client.withdraw_skill_submission(&id).await {
+                    match client.skills.withdraw_skill_submission(&id).await {
                         Ok(_) => {
                             print_success("Submission withdrawn successfully.");
                             Ok(())
@@ -168,10 +167,10 @@ pub async fn execute(
         }
         SkillCommands::Today { page, per_page } => {
             ensure_authenticated(config)?;
-            let client = ApiClient::new(config)?;
+            let client = config.to_client()?;
 
             // Fetch stats
-            match client.get_skill_upload_stats().await {
+            match client.skills.get_skill_upload_stats().await {
                 Ok(stats) => {
                     println!("\n{}", "Skill Upload Stats".bold().underline());
                     println!("  {}: {}", "Total Uploads".bold(), stats.total_uploads);
@@ -185,6 +184,7 @@ pub async fn execute(
 
             // Fetch today's uploads
             match client
+                .skills
                 .list_today_skill_uploads(agentlink_protocol::skill::TodaySkillUploadQuery {
                     page: Some(page),
                     per_page: Some(per_page),

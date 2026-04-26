@@ -27,6 +27,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart", "st
 
 # Serialization
 agentlink-protocol = { path = "../protocol" }
+agentlink-rust-sdk = { path = "../agentlink-rust-sdk" }
 rust_decimal = { version = "1.41", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

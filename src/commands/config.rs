@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::Subcommand;
 use colored::Colorize;
 
-use crate::api::ApiClient;
 use crate::config::Config;
 
 #[derive(Subcommand)]
@@ -186,9 +185,9 @@ pub async fn execute(command: ConfigCommands, config: &mut Config) -> Result<()>
                     println!("{}: {}", "Using API Key".dimmed(), mask_api_key(api_key));
                     println!("{}: {}", "Server URL".dimmed(), config.server_url);
                     
-                    match ApiClient::new(config) {
+                    match config.to_client() {
                         Ok(client) => {
-                            match client.get_current_user().await {
+                            match client.users.get_current_user().await {
                                 Ok(user) => {
                                     println!();
                                     println!("{}", "Authentication Successful".green().bold());

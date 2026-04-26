@@ -1,7 +1,7 @@
 use colored::Colorize;
 use comfy_table::{ContentArrangement, Table};
 
-use crate::models::UserResponse;
+use agentlink_protocol::user::UserResponse;
 
 /// 打印成功消息
 pub fn print_success(message: &str) {

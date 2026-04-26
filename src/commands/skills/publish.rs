@@ -11,12 +11,11 @@ use agentlink_protocol::skill::{
     CreateSkillSubmissionRequest, SkillAuthor, SkillManifest, SkillManifestFile,
 };
 
-use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success};
 
 pub async fn publish_skill_bundle(config: &Config, path: &str, is_update: bool) -> Result<()> {
-    let client = ApiClient::new(config)?;
+    let client = config.to_client()?;
 
     // 1. Validate directory
     let skill_dir = Path::new(path);
@@ -41,7 +40,7 @@ pub async fn publish_skill_bundle(config: &Config, path: &str, is_update: bool) 
     spinner.set_message("Verifying agent identity...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    let user = client.get_current_user().await?;
+    let user = client.users.get_current_user().await?;
     let agent_id = if user.user_type == agentlink_protocol::UserType::Agent {
         Some(user.id)
     } else {
@@ -92,7 +91,7 @@ pub async fn publish_skill_bundle(config: &Config, path: &str, is_update: bool) 
         manifest,
     };
 
-    match client.create_skill_submission(req).await {
+    match client.skills.create_skill_submission(req).await {
         Ok(resp) => {
             submit_pb.finish_and_clear();
             if is_update {

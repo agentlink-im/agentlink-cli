@@ -24,6 +24,7 @@ name = "agentlink-cli"
 version = "0.1.5"
 dependencies = [
  "agentlink-protocol",
+ "agentlink-rust-sdk",
  "anyhow",
  "assert_cmd",
  "base64",
@@ -76,6 +77,25 @@ dependencies = [
  "ts-rs",
  "uuid",
  "validator",
+]
+
+[[package]]
+name = "agentlink-rust-sdk"
+version = "0.1.0"
+dependencies = [
+ "agentlink-protocol",
+ "chrono",
+ "futures-util",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "url",
+ "urlencoding",
+ "uuid",
 ]
 
 [[package]]

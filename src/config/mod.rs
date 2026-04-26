@@ -2,9 +2,13 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// CLI 配置
+/// CLI 配置。
+///
+/// 在 [`agentlink_rust_sdk::SdkConfig`] 基础上扩展 CLI 专属字段（持久化路径、
+/// 输出格式默认值、webhook 地址等）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    // -- 与 SDK 共享的基础字段 --
     /// 基础 API 地址
     #[serde(default = "default_server_url")]
     pub server_url: String,
@@ -13,20 +17,22 @@ pub struct Config {
     #[serde(default = "default_websocket_url")]
     pub websocket_url: String,
 
-    /// Webhook 转发地址
-    /// CLI 通过 WebSocket 收到事件后，会 HTTP POST 到该地址
-    #[serde(default)]
-    pub webhook_url: Option<String>,
-
     /// 持久化的 Agent API Key（sk_*）
     /// 兼容历史字段名 `user_token`
     #[serde(default, alias = "user_token")]
     pub api_key: Option<String>,
 
+    // -- CLI 专属字段 --
+    /// Webhook 转发地址
+    /// CLI 通过 WebSocket 收到事件后，会 HTTP POST 到该地址
+    #[serde(default)]
+    pub webhook_url: Option<String>,
+
     /// 默认输出格式
     #[serde(default)]
     pub defaults: Defaults,
 
+    // -- 运行时字段（不持久化） --
     /// 运行时覆盖的 Agent API Key（不落盘）
     #[serde(skip)]
     pub runtime_api_key: Option<String>,
@@ -141,6 +147,23 @@ impl Config {
         *self = Self::default();
         self.config_path = config_path;
         self.runtime_api_key = runtime_api_key;
+    }
+
+    /// 构造 SDK 配置。
+    pub fn to_sdk_config(&self) -> agentlink_rust_sdk::SdkConfig {
+        agentlink_rust_sdk::SdkConfig {
+            base_url: self.server_url.clone(),
+            websocket_url: Some(self.websocket_url.clone()),
+            token: self.runtime_api_key.clone().or_else(|| self.api_key.clone()),
+            ..Default::default()
+        }
+    }
+
+    /// 基于当前配置构造 AgentLinkClient。
+    pub fn to_client(&self) -> Result<agentlink_rust_sdk::AgentLinkClient> {
+        let sdk_config = self.to_sdk_config();
+        agentlink_rust_sdk::AgentLinkClient::new(sdk_config)
+            .context("Failed to create AgentLink client")
     }
 
     /// 检查是否存在可用的 Agent API Key
@@ -288,5 +311,18 @@ user_token = "sk_legacy_token"
         assert!(error
             .to_string()
             .contains("only supports agent API keys (`sk_*`)"));
+    }
+
+    #[test]
+    fn test_to_sdk_config() {
+        let config = Config {
+            server_url: "https://api.test.com/".to_string(),
+            websocket_url: "wss://ws.test.com/".to_string(),
+            api_key: Some("sk_test".to_string()),
+            ..Default::default()
+        };
+        let sdk = config.to_sdk_config();
+        assert_eq!(sdk.base_url, "https://api.test.com/");
+        assert_eq!(sdk.token, Some("sk_test".to_string()));
     }
 }

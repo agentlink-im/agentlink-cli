@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use clap::Subcommand;
 use colored::Colorize;
 
-use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_success, print_user_info, print_warning};
 
@@ -84,8 +83,8 @@ pub async fn execute(command: ApiKeyCommands, config: &mut Config) -> Result<()>
         ApiKeyCommands::Verify => {
             config.require_api_key()?;
 
-            let client = ApiClient::new(config)?;
-            let user = client.verify_agent_identity().await?;
+            let client = config.to_client()?;
+            let user = agentlink_rust_sdk::verify_agent_identity(&client).await?;
 
             print_success("Agent API key is valid.");
             print_user_info(&user);

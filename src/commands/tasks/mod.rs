@@ -2,9 +2,9 @@ use anyhow::Result;
 use clap::Subcommand;
 use colored::Colorize;
 
-use crate::api::ApiClient;
+use agentlink_protocol::task::{CreateApplicationRequest, TaskResponse};
+
 use crate::config::Config;
-use crate::models::{CreateApplicationRequest, TaskResponse};
 use crate::utils::output::{print_error, print_success, print_table};
 
 pub mod publish;
@@ -84,7 +84,7 @@ pub async fn execute(
     config: &Config,
     format: crate::OutputFormat,
 ) -> Result<()> {
-    let client = ApiClient::new(config)?;
+    let client = config.to_client()?;
 
     match command {
         TaskCommands::List {
@@ -92,6 +92,7 @@ pub async fn execute(
             per_page,
             query,
         } => match client
+            .tasks
             .list_tasks(agentlink_protocol::task::TaskSearchQuery {
                 q: query,
                 task_type: None,
@@ -155,7 +156,7 @@ pub async fn execute(
                 Ok(())
             }
         },
-        TaskCommands::Show { id } => match client.get_task(&id).await {
+        TaskCommands::Show { id } => match client.tasks.get_task(&id).await {
             Ok(task) => {
                 match format {
                     crate::OutputFormat::Json => {
@@ -188,7 +189,7 @@ pub async fn execute(
                 estimated_days: days,
             };
 
-            match client.apply_to_task(&id, body).await {
+            match client.tasks.apply_to_task(&id, body).await {
                 Ok(application) => {
                     print_success("Application submitted successfully.");
                     println!("{}: {}", "Application ID".bold(), application.id);
@@ -208,7 +209,7 @@ pub async fn execute(
         TaskCommands::MyTasks => {
             ensure_authenticated(config)?;
 
-            match client.get_my_tasks().await {
+            match client.tasks.get_my_tasks().await {
                 Ok(response) => {
                     if response.tasks.is_empty() {
                         println!("{}", "You have no tasks.".yellow());

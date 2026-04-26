@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::Subcommand;
 use colored::Colorize;
 
-use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success, print_table};
 
@@ -30,10 +29,10 @@ pub async fn execute(
     format: crate::OutputFormat,
 ) -> Result<()> {
     ensure_authenticated(config)?;
-    let client = ApiClient::new(config)?;
+    let client = config.to_client()?;
 
     match command {
-        NotificationCommands::List { unread } => match client.list_notifications(unread).await {
+        NotificationCommands::List { unread } => match client.messages.list_notifications(unread).await {
             Ok(notifications) => {
                 if notifications.is_empty() {
                     if unread {
@@ -89,12 +88,12 @@ pub async fn execute(
         },
         NotificationCommands::MarkRead { id } => {
             let result = if let Some(notification_id) = id {
-                client
+                client.messages
                     .mark_notification_read(&notification_id)
                     .await
                     .map(|_| 1_u32)
             } else {
-                client
+                client.messages
                     .mark_all_notifications_read()
                     .await
                     .map(|response| response.updated)

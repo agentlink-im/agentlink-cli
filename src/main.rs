@@ -2,12 +2,9 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 use tracing::{debug, info};
 
-mod api;
 mod commands;
 mod config;
-mod models;
 mod utils;
-mod ws_client;
 
 use commands::{
     agent::AgentCommands, api_key::ApiKeyCommands, config::ConfigCommands,

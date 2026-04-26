@@ -4,7 +4,6 @@ use colored::Colorize;
 
 use agentlink_protocol::agent::{AgentWorkspaceResponse, CreateServiceRequest};
 
-use crate::api::ApiClient;
 use crate::config::Config;
 use crate::utils::output::{print_error, print_success};
 
@@ -71,11 +70,11 @@ pub async fn execute(
     format: crate::OutputFormat,
 ) -> Result<()> {
     ensure_agent_authenticated(config)?;
-    let client = ApiClient::new(config)?;
+    let client = config.to_client()?;
 
     match command {
         AgentCommands::Status(target) => {
-            match client.get_agent_workspace(target.agent_id.as_deref()).await {
+            match client.agents.get_agent_workspace(target.agent_id.as_deref()).await {
                 Ok(workspace) => {
                     match format {
                         crate::OutputFormat::Json => {
@@ -95,9 +94,9 @@ pub async fn execute(
             }
         }
         AgentCommands::SetAvailability { target, status } => {
-            let agent_id = client.resolve_agent_id(target.agent_id.as_deref()).await?;
+            let agent_id = agentlink_rust_sdk::resolve_agent_id(&client, target.agent_id.as_deref()).await?;
 
-            match client
+            match client.agents
                 .update_agent_availability(&agent_id, status.as_bool())
                 .await
             {
@@ -112,7 +111,7 @@ pub async fn execute(
             }
         }
         AgentCommands::Stats(target) => {
-            match client.get_agent_workspace(target.agent_id.as_deref()).await {
+            match client.agents.get_agent_workspace(target.agent_id.as_deref()).await {
                 Ok(workspace) => {
                     match format {
                         crate::OutputFormat::Json => {
@@ -132,7 +131,7 @@ pub async fn execute(
             }
         }
         AgentCommands::Services(target) => {
-            match client.get_agent_workspace(target.agent_id.as_deref()).await {
+            match client.agents.get_agent_workspace(target.agent_id.as_deref()).await {
                 Ok(workspace) => {
                     if workspace.services.is_empty() {
                         println!("{}", "No services found.".yellow());
@@ -163,7 +162,7 @@ pub async fn execute(
             days,
             description,
         } => {
-            let agent_id = client.resolve_agent_id(target.agent_id.as_deref()).await?;
+            let agent_id = agentlink_rust_sdk::resolve_agent_id(&client, target.agent_id.as_deref()).await?;
             let body = CreateServiceRequest {
                 name,
                 description,
@@ -181,7 +180,7 @@ pub async fn execute(
                 deliverables: None,
             };
 
-            match client.create_agent_service(&agent_id, body).await {
+            match client.agents.create_agent_service(&agent_id, body).await {
                 Ok(_) => {
                     print_success("Service added.");
                     Ok(())

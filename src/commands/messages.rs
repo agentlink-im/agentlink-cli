@@ -2,12 +2,13 @@ use anyhow::Result;
 use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 
-use crate::api::ApiClient;
-use crate::config::Config;
-use crate::models::{
-    ConversationResponse, ConversationType, CreateConversationRequest, MessageType,
-    ParticipantResponse, SendMessageRequest,
+use agentlink_protocol::message::{
+    ConversationResponse, CreateConversationRequest, ParticipantResponse, SendMessageRequest,
 };
+use agentlink_protocol::ws_event::WsMessageCreatedPayload;
+use agentlink_protocol::{ConversationType, MessageType};
+
+use crate::config::Config;
 use crate::utils::output::{print_error, print_success, print_table};
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -65,10 +66,11 @@ pub async fn execute(
     format: crate::OutputFormat,
 ) -> Result<()> {
     ensure_authenticated(config)?;
-    let client = ApiClient::new(config)?;
+    let client = config.to_client()?;
 
     match command {
         MessageCommands::List => match client
+            .messages
             .list_conversations(agentlink_protocol::message::ConversationQuery {
                 page: None,
                 per_page: None,
@@ -98,6 +100,7 @@ pub async fn execute(
             }
         },
         MessageCommands::Show { conversation_id } => match client
+            .messages
             .get_messages(
                 &conversation_id,
                 agentlink_protocol::message::MessageQuery {
@@ -156,7 +159,7 @@ pub async fn execute(
                 reply_to: None,
             };
 
-            match client.send_message(&conversation_id, body).await {
+            match client.messages.send_message(&conversation_id, body).await {
                 Ok(message) => {
                     print_success("Message sent.");
                     println!("{}: {}", "ID".bold(), message.id);
@@ -186,6 +189,7 @@ pub async fn execute(
                 .collect::<Vec<_>>();
 
             let conversation = client
+                .messages
                 .create_conversation(CreateConversationRequest {
                     kind: kind.into(),
                     title,
@@ -206,7 +210,7 @@ pub async fn execute(
             }
         }
         MessageCommands::Watch { conversation_id } => {
-            if let Err(error) = crate::ws_client::run_watch(config, conversation_id).await {
+            if let Err(error) = run_watch(config, conversation_id.as_deref()).await {
                 print_error(&format!("WebSocket error: {}", error));
             }
             Ok(())
@@ -215,13 +219,14 @@ pub async fn execute(
 }
 
 async fn resolve_conversation_id(
-    client: &ApiClient,
+    client: &agentlink_rust_sdk::AgentLinkClient,
     recipient: &str,
 ) -> Result<String> {
-    let user = client.get_user(recipient).await?;
+    let user = client.users.get_user(recipient).await?;
     let target_user_id = user.id.to_string();
 
     let conversations = client
+        .messages
         .list_conversations(agentlink_protocol::message::ConversationQuery {
             page: None,
             per_page: None,
@@ -242,6 +247,7 @@ async fn resolve_conversation_id(
 
     // No existing conversation: create a new direct one
     let new_conversation = client
+        .messages
         .create_conversation(CreateConversationRequest {
             kind: ConversationType::Direct,
             title: None,
@@ -317,4 +323,77 @@ fn format_participants(participants: &[ParticipantResponse]) -> String {
             participants.len() - 1
         )
     }
+}
+
+/// 使用 SDK WebSocket 客户端实现消息监听。
+async fn run_watch(
+    config: &Config,
+    conversation_filter: Option<&str>,
+) -> anyhow::Result<()> {
+    use agentlink_rust_sdk::websocket::WsEvent;
+    use futures_util::StreamExt;
+
+    let client = config.to_client()?;
+    let mut ws_stream = client.websocket().connect().await?;
+
+    println!("{}", "Starting message watcher...".cyan());
+    println!("Press Ctrl+C to exit.\n");
+
+    while let Some(event) = ws_stream.next().await {
+        match event {
+            Ok(WsEvent::MessageCreated(payload)) => {
+                handle_message_created(&payload, conversation_filter);
+            }
+            Ok(WsEvent::ConnectionReady(payload)) => {
+                println!(
+                    "[{}] [READY] Connected as {}",
+                    chrono::Utc::now().format("%H:%M:%S"),
+                    payload.linkid
+                );
+            }
+            Ok(WsEvent::EventNotification(payload)) => {
+                println!("[NOTIFICATION] {}", payload.data.title);
+                if !payload.data.content.is_empty() {
+                    println!("  {}", payload.data.content);
+                }
+            }
+            Ok(WsEvent::Pong(_)) => {}
+            Ok(WsEvent::Error(payload)) => {
+                eprintln!(
+                    "[{}] [ERROR] {}: {}",
+                    chrono::Utc::now().format("%H:%M:%S"),
+                    payload.code,
+                    payload.message
+                );
+            }
+            Ok(WsEvent::Raw(text)) => {
+                println!("[RAW] {}", text);
+            }
+            Err(e) => {
+                eprintln!("[ERROR] WebSocket error: {}", e);
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_message_created(
+    payload: &WsMessageCreatedPayload,
+    filter_conversation_id: Option<&str>,
+) {
+    if let Some(filter) = filter_conversation_id {
+        if payload.message.conversation_id.to_string() != filter {
+            return;
+        }
+    }
+
+    let msg = &payload.message;
+    println!(
+        "[{}] [MESSAGE] {}: {}",
+        msg.created_at.format("%H:%M:%S"),
+        msg.sender_name,
+        msg.content
+    );
 }
