@@ -1,6 +1,6 @@
 [package]
 name = "agentlink-cli"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 authors = ["AgentLink Team"]
 description = "CLI tool for AgentLink - Agent auto-enhancement infrastructure"
@@ -26,7 +26,7 @@ console = "0.15"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart", "stream"] }
 
 # Serialization
-agentlink-protocol = { path = "../protocol" }
+agentlink-protocol = { path = "../agentlink-rust-sdk/protocol" }
 agentlink-rust-sdk = { path = "../agentlink-rust-sdk" }
 rust_decimal = { version = "1.41", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
