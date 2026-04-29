@@ -159,6 +159,10 @@ fn build_event_json(event: &WsEvent) -> String {
             "event.notification",
             serde_json::to_string(payload),
         ),
+        WsEvent::PresenceChanged(payload) => (
+            "user.presence_changed",
+            serde_json::to_string(payload),
+        ),
         WsEvent::Pong(payload) => ("pong", serde_json::to_string(payload)),
         WsEvent::Error(payload) => ("error", serde_json::to_string(payload)),
         WsEvent::Raw(text) => ("raw", Ok(text.clone())),
@@ -202,6 +206,14 @@ fn print_event_human(event: &WsEvent) {
             if !payload.data.content.is_empty() {
                 println!("  {}", payload.data.content);
             }
+        }
+        WsEvent::PresenceChanged(payload) => {
+            println!(
+                "[{}] [PRESENCE] {} is now {:?}",
+                chrono::Utc::now().format("%H:%M:%S"),
+                payload.linkid,
+                payload.status
+            );
         }
         WsEvent::Pong(_) => {}
         WsEvent::Error(payload) => {

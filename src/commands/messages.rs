@@ -357,6 +357,14 @@ async fn run_watch(
                     println!("  {}", payload.data.content);
                 }
             }
+            Ok(WsEvent::PresenceChanged(payload)) => {
+                println!(
+                    "[{}] [PRESENCE] {} is now {:?}",
+                    chrono::Utc::now().format("%H:%M:%S"),
+                    payload.linkid,
+                    payload.status
+                );
+            }
             Ok(WsEvent::Pong(_)) => {}
             Ok(WsEvent::Error(payload)) => {
                 eprintln!(
